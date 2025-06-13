@@ -43,8 +43,10 @@ embeddings = OllamaEmbeddings(model="all-minilm")
 
 # Ensure chroma_db directory exists and has proper permissions
 CHROMA_DB_DIR = "./chroma_db"
-if not os.path.exists(CHROMA_DB_DIR):
-    os.makedirs(CHROMA_DB_DIR, mode=0o777)
+if os.path.exists(CHROMA_DB_DIR):
+    # Remove existing directory if it exists
+    shutil.rmtree(CHROMA_DB_DIR)
+os.makedirs(CHROMA_DB_DIR, mode=0o777)
 
 # Initialize Chroma client with proper settings
 chroma_client = chromadb.PersistentClient(
@@ -56,14 +58,11 @@ chroma_client = chromadb.PersistentClient(
     )
 )
 
-# Create or get the collection
-try:
-    collection = chroma_client.get_collection("documents")
-except Exception:
-    collection = chroma_client.create_collection(
-        name="documents",
-        metadata={"hnsw:space": "cosine"}
-    )
+# Create the collection
+collection = chroma_client.create_collection(
+    name="documents",
+    metadata={"hnsw:space": "cosine"}
+)
 
 # Initialize Chroma as the vector store
 vector_store = Chroma(
@@ -189,101 +188,181 @@ def process_document(file_path: str, file_type: str) -> List[dict]:
             for sheet_name in excel_file.sheet_names:
                 df = pd.read_excel(file_path, sheet_name=sheet_name)
                 
-                # Add sheet-level information
-                sheet_info = f"Excel Sheet '{sheet_name}' Information:\n"
-                sheet_info += f"Total Rows: {len(df)}\n"
-                sheet_info += f"Total Columns: {len(df.columns)}\n"
-                sheet_info += f"Column Names: {', '.join(df.columns)}\n"
-                sheet_info += f"Memory Usage: {df.memory_usage(deep=True).sum() / 1024:.2f} KB\n"
+                # Detect sub-tables by looking for empty rows
+                empty_rows = df.index[df.isna().all(axis=1)].tolist()
+                sub_tables = []
+                start_idx = 0
                 
-                chunks.append({
-                    "content": sheet_info,
-                    "metadata": {
-                        "source": file_path,
-                        "type": "excel_sheet_info",
-                        "sheet_name": sheet_name,
-                        "row_count": str(len(df)),
-                        "column_count": str(len(df.columns)),
-                        "columns": str(list(df.columns))
-                    }
-                })
+                for empty_row in empty_rows:
+                    if empty_row > start_idx:
+                        sub_tables.append(df.iloc[start_idx:empty_row])
+                    start_idx = empty_row + 1
                 
-                # Process each column in the sheet
-                for column in df.columns:
-                    # Get column statistics
-                    col_stats = {
-                        "mean": df[column].mean() if pd.api.types.is_numeric_dtype(df[column]) else None,
-                        "median": df[column].median() if pd.api.types.is_numeric_dtype(df[column]) else None,
-                        "std": df[column].std() if pd.api.types.is_numeric_dtype(df[column]) else None,
-                        "unique_values": df[column].nunique(),
-                        "null_count": df[column].isnull().sum(),
-                        "data_type": str(df[column].dtype)
-                    }
+                # Add the last sub-table if there is one
+                if start_idx < len(df):
+                    sub_tables.append(df.iloc[start_idx:])
+                
+                # If no sub-tables were found, treat the entire sheet as one table
+                if not sub_tables:
+                    sub_tables = [df]
+                
+                # Process each sub-table
+                for table_idx, sub_table in enumerate(sub_tables):
+                    # Clean the sub-table
+                    sub_table = sub_table.dropna(how='all').dropna(axis=1, how='all')
                     
-                    # Create a detailed description of the column
-                    col_description = f"Column '{column}' in sheet '{sheet_name}':\n"
-                    col_description += f"Data Type: {col_stats['data_type']}\n"
-                    if pd.api.types.is_numeric_dtype(df[column]):
-                        col_description += f"Mean: {col_stats['mean']:.2f}\n"
-                        col_description += f"Median: {col_stats['median']:.2f}\n"
-                        col_description += f"Standard Deviation: {col_stats['std']:.2f}\n"
-                    col_description += f"Unique Values: {col_stats['unique_values']}\n"
-                    col_description += f"Null Values: {col_stats['null_count']}\n"
+                    # Skip empty tables
+                    if sub_table.empty:
+                        continue
                     
-                    # Add sample values
-                    sample_values = df[column].dropna().head(5).tolist()
-                    col_description += f"Sample Values: {sample_values}\n"
+                    # Add table-level information
+                    table_info = f"Excel Sub-table {table_idx + 1} in sheet '{sheet_name}' Information:\n"
+                    table_info += f"Total Rows: {len(sub_table)}\n"
+                    table_info += f"Total Columns: {len(sub_table.columns)}\n"
+                    table_info += f"Column Names: {', '.join(sub_table.columns)}\n"
+                    table_info += f"Memory Usage: {sub_table.memory_usage(deep=True).sum() / 1024:.2f} KB\n"
                     
-                    # Add column content
-                    col_content = df[column].astype(str).str.cat(sep="\n")
-                    col_description += f"\nColumn Content:\n{col_content}"
+                    # Add data types information
+                    table_info += "\nColumn Data Types:\n"
+                    for col in sub_table.columns:
+                        dtype = sub_table[col].dtype
+                        if pd.api.types.is_datetime64_any_dtype(dtype):
+                            table_info += f"{col}: datetime\n"
+                        elif pd.api.types.is_numeric_dtype(dtype):
+                            table_info += f"{col}: numeric ({dtype})\n"
+                        else:
+                            table_info += f"{col}: {dtype}\n"
                     
                     chunks.append({
-                        "content": col_description,
+                        "content": table_info,
                         "metadata": {
                             "source": file_path,
-                            "type": "excel_column",
+                            "type": "excel_subtable_info",
                             "sheet_name": sheet_name,
-                            "column_name": column,
-                            "row_count": str(len(df)),
-                            "column_index": str(df.columns.get_loc(column)),
-                            "statistics": str(col_stats)
+                            "subtable_index": str(table_idx + 1),
+                            "row_count": str(len(sub_table)),
+                            "column_count": str(len(sub_table.columns)),
+                            "columns": str(list(sub_table.columns))
                         }
                     })
-                
-                # Add correlation information for numerical columns in this sheet
-                numeric_cols = df.select_dtypes(include=['int64', 'float64']).columns
-                if len(numeric_cols) > 1:
-                    corr_matrix = df[numeric_cols].corr()
-                    corr_info = f"Correlation Matrix for Numerical Columns in sheet '{sheet_name}':\n"
-                    corr_info += str(corr_matrix)
                     
-                    chunks.append({
-                        "content": corr_info,
-                        "metadata": {
-                            "source": file_path,
-                            "type": "excel_correlations",
-                            "sheet_name": sheet_name,
-                            "numeric_columns": str(list(numeric_cols))
-                        }
-                    })
-                
-                # Add row-level information for the first 100 rows (to avoid too many chunks)
-                for idx, row in df.head(100).iterrows():
-                    row_data = {col: str(val) for col, val in row.items()}
-                    row_info = f"Row {idx + 1} in sheet '{sheet_name}':\n"
-                    row_info += "\n".join(f"{col}: {val}" for col, val in row_data.items())
+                    # Process each column in the sub-table
+                    for column in sub_table.columns:
+                        # Get column statistics
+                        col_stats = {}
+                        
+                        # Handle different data types
+                        if pd.api.types.is_datetime64_any_dtype(sub_table[column]):
+                            col_stats.update({
+                                "min_date": sub_table[column].min(),
+                                "max_date": sub_table[column].max(),
+                                "unique_dates": sub_table[column].nunique(),
+                                "null_count": sub_table[column].isnull().sum()
+                            })
+                        elif pd.api.types.is_numeric_dtype(sub_table[column]):
+                            col_stats.update({
+                                "mean": sub_table[column].mean(),
+                                "median": sub_table[column].median(),
+                                "std": sub_table[column].std(),
+                                "min": sub_table[column].min(),
+                                "max": sub_table[column].max(),
+                                "unique_values": sub_table[column].nunique(),
+                                "null_count": sub_table[column].isnull().sum()
+                            })
+                        else:
+                            col_stats.update({
+                                "unique_values": sub_table[column].nunique(),
+                                "null_count": sub_table[column].isnull().sum(),
+                                "most_common": sub_table[column].value_counts().head(5).to_dict()
+                            })
+                        
+                        # Create a detailed description of the column
+                        col_description = f"Column '{column}' in sub-table {table_idx + 1} of sheet '{sheet_name}':\n"
+                        col_description += f"Data Type: {sub_table[column].dtype}\n"
+                        
+                        # Add type-specific statistics
+                        if pd.api.types.is_datetime64_any_dtype(sub_table[column]):
+                            col_description += f"Date Range: {col_stats['min_date']} to {col_stats['max_date']}\n"
+                            col_description += f"Unique Dates: {col_stats['unique_dates']}\n"
+                        elif pd.api.types.is_numeric_dtype(sub_table[column]):
+                            col_description += f"Mean: {col_stats['mean']:.2f}\n"
+                            col_description += f"Median: {col_stats['median']:.2f}\n"
+                            col_description += f"Standard Deviation: {col_stats['std']:.2f}\n"
+                            col_description += f"Range: {col_stats['min']:.2f} to {col_stats['max']:.2f}\n"
+                        else:
+                            col_description += "Most Common Values:\n"
+                            for value, count in col_stats['most_common'].items():
+                                col_description += f"- {value}: {count} occurrences\n"
+                        
+                        col_description += f"Null Values: {col_stats['null_count']}\n"
+                        
+                        # Add sample values (formatted appropriately)
+                        sample_values = sub_table[column].dropna().head(5)
+                        if pd.api.types.is_datetime64_any_dtype(sub_table[column]):
+                            sample_values = sample_values.dt.strftime('%Y-%m-%d %H:%M:%S')
+                        col_description += f"Sample Values: {sample_values.tolist()}\n"
+                        
+                        # Add column content (formatted appropriately)
+                        col_content = sub_table[column].astype(str)
+                        if pd.api.types.is_datetime64_any_dtype(sub_table[column]):
+                            col_content = sub_table[column].dt.strftime('%Y-%m-%d %H:%M:%S')
+                        col_description += f"\nColumn Content:\n{col_content.str.cat(sep='\n')}"
+                        
+                        chunks.append({
+                            "content": col_description,
+                            "metadata": {
+                                "source": file_path,
+                                "type": "excel_column",
+                                "sheet_name": sheet_name,
+                                "subtable_index": str(table_idx + 1),
+                                "column_name": column,
+                                "row_count": str(len(sub_table)),
+                                "column_index": str(sub_table.columns.get_loc(column)),
+                                "statistics": str(col_stats)
+                            }
+                        })
                     
-                    chunks.append({
-                        "content": row_info,
-                        "metadata": {
-                            "source": file_path,
-                            "type": "excel_row",
-                            "sheet_name": sheet_name,
-                            "row_index": str(idx),
-                            "columns": str(list(df.columns))
-                        }
-                    })
+                    # Add correlation information for numerical columns in this sub-table
+                    numeric_cols = sub_table.select_dtypes(include=['int64', 'float64']).columns
+                    if len(numeric_cols) > 1:
+                        corr_matrix = sub_table[numeric_cols].corr()
+                        corr_info = f"Correlation Matrix for Numerical Columns in sub-table {table_idx + 1} of sheet '{sheet_name}':\n"
+                        corr_info += str(corr_matrix)
+                        
+                        chunks.append({
+                            "content": corr_info,
+                            "metadata": {
+                                "source": file_path,
+                                "type": "excel_correlations",
+                                "sheet_name": sheet_name,
+                                "subtable_index": str(table_idx + 1),
+                                "numeric_columns": str(list(numeric_cols))
+                            }
+                        })
+                    
+                    # Add row-level information for the first 100 rows (to avoid too many chunks)
+                    for idx, row in sub_table.head(100).iterrows():
+                        row_data = {}
+                        for col, val in row.items():
+                            if pd.api.types.is_datetime64_any_dtype(sub_table[col]):
+                                row_data[col] = val.strftime('%Y-%m-%d %H:%M:%S') if pd.notnull(val) else None
+                            else:
+                                row_data[col] = str(val) if pd.notnull(val) else None
+                        
+                        row_info = f"Row {idx + 1} in sub-table {table_idx + 1} of sheet '{sheet_name}':\n"
+                        row_info += "\n".join(f"{col}: {val}" for col, val in row_data.items())
+                        
+                        chunks.append({
+                            "content": row_info,
+                            "metadata": {
+                                "source": file_path,
+                                "type": "excel_row",
+                                "sheet_name": sheet_name,
+                                "subtable_index": str(table_idx + 1),
+                                "row_index": str(idx),
+                                "columns": str(list(sub_table.columns))
+                            }
+                        })
         
         elif file_type == "application/pdf":
             with open(file_path, 'rb') as file:
@@ -443,15 +522,6 @@ async def upload_file(file: UploadFile = File(...)):
             })
             # Clean metadata to ensure all values are simple types
             chunk["metadata"] = clean_metadata(chunk["metadata"])
-        
-        # Ensure collection exists
-        try:
-            collection = chroma_client.get_collection("documents")
-        except Exception:
-            collection = chroma_client.create_collection(
-                name="documents",
-                metadata={"hnsw:space": "cosine"}
-            )
         
         # Add texts to vector store
         vector_store.add_texts(

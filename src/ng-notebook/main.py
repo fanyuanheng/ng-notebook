@@ -21,6 +21,8 @@ import shutil
 import chromadb
 from chromadb.config import Settings
 from langchain_community.vectorstores.utils import filter_complex_metadata
+from langchain_community.document_loaders import UnstructuredPowerPointLoader
+from langchain.text_splitter import MarkdownHeaderTextSplitter
 
 # Initialize FastAPI app
 app = FastAPI()
@@ -392,32 +394,76 @@ def process_document(file_path: str, file_type: str) -> List[dict]:
                     })
         
         elif file_type == "application/vnd.openxmlformats-officedocument.presentationml.presentation":
-            prs = Presentation(file_path)
-            text = ""
-            for slide in prs.slides:
-                for shape in slide.shapes:
-                    if hasattr(shape, "text"):
-                        text += shape.text + "\n"
+            # Use LangChain's UnstructuredPowerPointLoader for better content extraction
+            loader = UnstructuredPowerPointLoader(file_path)
+            documents = loader.load()
             
-            # Split text into chunks
-            text_splitter = RecursiveCharacterTextSplitter(
-                chunk_size=1000,
-                chunk_overlap=200,
-                length_function=len,
-                separators=["\n\n", "\n", ".", "!", "?", ",", " ", ""]
-            )
-            
-            # Create chunks with metadata
-            for i, chunk in enumerate(text_splitter.split_text(text)):
+            # Process each slide as a separate document
+            for doc in documents:
+                # Extract slide number from metadata if available
+                slide_number = doc.metadata.get("page_number", "unknown")
+                
+                # Create slide-level information
+                slide_info = f"PowerPoint Slide {slide_number} Information:\n"
+                slide_info += f"Content Type: {doc.metadata.get('content_type', 'unknown')}\n"
+                slide_info += f"Content:\n{doc.page_content}\n"
+                
                 chunks.append({
-                    "content": chunk,
+                    "content": slide_info,
                     "metadata": {
                         "source": file_path,
-                        "type": "ppt",
-                        "slide": str(i + 1),
-                        "total_slides": str(len(prs.slides))
+                        "type": "ppt_slide_info",
+                        "slide_number": str(slide_number),
+                        "content_type": doc.metadata.get("content_type", "unknown")
                     }
                 })
+                
+                # Split slide content into smaller chunks if needed
+                text_splitter = RecursiveCharacterTextSplitter(
+                    chunk_size=500,
+                    chunk_overlap=50,
+                    length_function=len,
+                    separators=["\n\n", "\n", ".", "!", "?", ",", " ", ""]
+                )
+                
+                # Create content chunks with metadata
+                content_chunks = text_splitter.split_text(doc.page_content)
+                for i, chunk in enumerate(content_chunks):
+                    chunks.append({
+                        "content": chunk,
+                        "metadata": {
+                            "source": file_path,
+                            "type": "ppt_content",
+                            "slide_number": str(slide_number),
+                            "chunk_index": str(i + 1),
+                            "total_chunks": str(len(content_chunks))
+                        }
+                    })
+            
+            # Add presentation-level information
+            prs = Presentation(file_path)
+            presentation_info = f"PowerPoint Presentation Information:\n"
+            presentation_info += f"Total Slides: {len(prs.slides)}\n"
+            presentation_info += f"Slide Layouts Used: {', '.join(set(slide.slide_layout.name for slide in prs.slides))}\n"
+            
+            # Add slide titles and their sequence
+            presentation_info += "\nSlide Sequence:\n"
+            for i, slide in enumerate(prs.slides, 1):
+                title = "No Title"
+                for shape in slide.shapes:
+                    if hasattr(shape, "text") and shape.text.strip():
+                        title = shape.text.strip()
+                        break
+                presentation_info += f"Slide {i}: {title}\n"
+            
+            chunks.append({
+                "content": presentation_info,
+                "metadata": {
+                    "source": file_path,
+                    "type": "ppt_presentation_info",
+                    "total_slides": str(len(prs.slides))
+                }
+            })
         
         elif file_type in ["text/csv", "application/vnd.ms-excel"]:
             df = pd.read_csv(file_path)

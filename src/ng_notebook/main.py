@@ -57,36 +57,8 @@ document_processor = DocumentProcessor()
 llm = Ollama(model="llama3.3:latest")
 embeddings = OllamaEmbeddings(model="all-minilm")
 
-# Ensure chroma_db directory exists and has proper permissions
-CHROMA_DB_DIR = "./chroma_db"
-if os.path.exists(CHROMA_DB_DIR):
-    # Remove existing directory if it exists
-    shutil.rmtree(CHROMA_DB_DIR)
-os.makedirs(CHROMA_DB_DIR, mode=0o777)
-
-# Initialize Chroma client with proper settings
-chroma_client = chromadb.PersistentClient(
-    path=CHROMA_DB_DIR,
-    settings=Settings(
-        anonymized_telemetry=False,
-        allow_reset=True,
-        is_persistent=True
-    )
-)
-
-# Create the collection
-collection = chroma_client.create_collection(
-    name="documents",
-    metadata={"hnsw:space": "cosine"}
-)
-
-# Initialize Chroma as the vector store
-vector_store = Chroma(
-    client=chroma_client,
-    embedding_function=embeddings,
-    collection_name="documents",
-    persist_directory=CHROMA_DB_DIR
-)
+# Get vector store instance using singleton pattern
+vector_store = get_vector_store()
 
 # Initialize conversation memory
 memory = ConversationBufferMemory(
@@ -320,69 +292,48 @@ Answer:"""
 @app.post("/clear-db")
 async def clear_database():
     """Clear the Chroma database."""
-    global vector_store, uploaded_documents, chroma_client, collection
     try:
-        # First, try to delete the collection
-        try:
-            chroma_client.delete_collection("documents")
-        except Exception as e:
-            print(f"Error deleting collection: {str(e)}")
+        # Get the vector store instance
+        vector_store = get_vector_store()
         
-        # Then delete the Chroma database directory
+        # Delete the collection
+        try:
+            vector_store._collection.delete()
+        except Exception as e:
+            logger.error(f"Error deleting collection: {str(e)}")
+        
+        # Delete the Chroma database directory
         if os.path.exists(CHROMA_DB_DIR):
             try:
                 shutil.rmtree(CHROMA_DB_DIR)
             except Exception as e:
-                print(f"Error removing directory: {str(e)}")
+                logger.error(f"Error removing directory: {str(e)}")
                 # Try to remove files individually
                 for root, dirs, files in os.walk(CHROMA_DB_DIR, topdown=False):
                     for name in files:
                         try:
                             os.remove(os.path.join(root, name))
                         except Exception as e:
-                            print(f"Error removing file {name}: {str(e)}")
+                            logger.error(f"Error removing file {name}: {str(e)}")
                     for name in dirs:
                         try:
                             os.rmdir(os.path.join(root, name))
                         except Exception as e:
-                            print(f"Error removing directory {name}: {str(e)}")
+                            logger.error(f"Error removing directory {name}: {str(e)}")
                 try:
                     os.rmdir(CHROMA_DB_DIR)
                 except Exception as e:
-                    print(f"Error removing root directory: {str(e)}")
+                    logger.error(f"Error removing root directory: {str(e)}")
         
         # Create fresh directory with proper permissions
         os.makedirs(CHROMA_DB_DIR, mode=0o777, exist_ok=True)
-        
-        # Reinitialize Chroma client
-        chroma_client = chromadb.PersistentClient(
-            path=CHROMA_DB_DIR,
-            settings=Settings(
-                anonymized_telemetry=False,
-                allow_reset=True,
-                is_persistent=True
-            )
-        )
-        
-        # Create a new collection
-        collection = chroma_client.create_collection(
-            name="documents",
-            metadata={"hnsw:space": "cosine"}
-        )
-        
-        # Reset the vector store
-        vector_store = Chroma(
-            client=chroma_client,
-            embedding_function=embeddings,
-            collection_name="documents",
-            persist_directory=CHROMA_DB_DIR
-        )
         
         # Clear uploaded documents set
         uploaded_documents.clear()
         
         return {"message": "Database cleared successfully"}
     except Exception as e:
+        logger.error(f"Error clearing database: {str(e)}")
         return {"error": f"Error clearing database: {str(e)}"}
 
 @app.get("/collections")

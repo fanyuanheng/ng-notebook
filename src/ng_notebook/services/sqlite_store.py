@@ -54,10 +54,16 @@ class SQLiteStore:
             )
             conn.execute("PRAGMA journal_mode=WAL")  # Use Write-Ahead Logging
             conn.execute("PRAGMA busy_timeout=30000")  # 30 second timeout
+            conn.execute("PRAGMA synchronous=NORMAL")  # Faster writes
+            conn.execute("PRAGMA cache_size=-2000")  # Use 2MB of cache
+            conn.execute("PRAGMA temp_store=MEMORY")  # Store temp tables in memory
             yield conn
         finally:
             if conn:
-                conn.close()
+                try:
+                    conn.close()
+                except Exception as e:
+                    logger.error(f"Error closing database connection: {str(e)}", exc_info=True)
 
     def _init_db(self):
         """Initialize the database with necessary tables."""
@@ -110,7 +116,7 @@ class SQLiteStore:
             
             with self.get_connection() as conn:
                 # Start a transaction
-                conn.execute("BEGIN TRANSACTION")
+                conn.execute("BEGIN IMMEDIATE TRANSACTION")
                 try:
                     cursor = conn.cursor()
                     
@@ -140,8 +146,11 @@ class SQLiteStore:
                         table_name = f"excel_data_{file_id}_{safe_sheet_name}"
                         logger.debug(f"Using sanitized table name: {table_name}")
                         
+                        # Drop existing table if it exists
+                        cursor.execute(f"DROP TABLE IF EXISTS {table_name}")
+                        
                         # Create table for sheet data
-                        df.to_sql(table_name, conn, if_exists='replace', index=False)
+                        df.to_sql(table_name, conn, if_exists='append', index=False)
                         logger.debug(f"Created table {table_name} with {len(df)} rows and {len(df.columns)} columns")
                         
                         # Record sheet metadata
@@ -193,7 +202,7 @@ class SQLiteStore:
             
             with self.get_connection() as conn:
                 # Start a transaction
-                conn.execute("BEGIN TRANSACTION")
+                conn.execute("BEGIN IMMEDIATE TRANSACTION")
                 try:
                     cursor = conn.cursor()
                     
@@ -218,8 +227,11 @@ class SQLiteStore:
                     table_name = f"csv_data_{file_id}_{safe_filename}"
                     logger.debug(f"Using sanitized table name: {table_name}")
                     
+                    # Drop existing table if it exists
+                    cursor.execute(f"DROP TABLE IF EXISTS {table_name}")
+                    
                     # Create table for CSV data
-                    df.to_sql(table_name, conn, if_exists='replace', index=False)
+                    df.to_sql(table_name, conn, if_exists='append', index=False)
                     logger.debug(f"Created table {table_name} with {len(df)} rows and {len(df.columns)} columns")
                     
                     # Record sheet metadata (CSV is treated as a single sheet)

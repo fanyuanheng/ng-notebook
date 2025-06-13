@@ -23,9 +23,11 @@ from chromadb.config import Settings
 from langchain_community.vectorstores.utils import filter_complex_metadata
 from langchain_community.document_loaders import UnstructuredPowerPointLoader
 from langchain.text_splitter import MarkdownHeaderTextSplitter
+from .api.routes import router
+from .core.config import API_HOST, API_PORT
 
 # Initialize FastAPI app
-app = FastAPI()
+app = FastAPI(title="Neogenesis Notebook API")
 
 # Add CORS middleware
 app.add_middleware(
@@ -727,5 +729,8 @@ async def get_collections():
     except Exception as e:
         return {"error": f"Error getting collections: {str(e)}"}
 
+# Include API routes
+app.include_router(router, prefix="/api")
+
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8000) 
+    uvicorn.run(app, host=API_HOST, port=API_PORT) 

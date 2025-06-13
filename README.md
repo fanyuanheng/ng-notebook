@@ -1,88 +1,67 @@
-# Neogenesis Notebook: Document Chat with LangChain & Llama 3.3
+# Neogenesis Notebook
 
-This project is a web-based Retrieval-Augmented Generation (RAG) chat application. It allows you to upload documents (PDF, Excel, CSV, PowerPoint, and text files) and chat with them using a local Llama 3.3 model via Ollama. The backend is powered by FastAPI, and the frontend uses Streamlit.
+An AI-powered document analysis assistant that can process and analyze PDF, Excel, and PowerPoint files.
 
----
+## Project Structure
+
+```
+src/ng-notebook/
+├── api/                 # API routes and endpoints
+│   └── routes.py       # FastAPI route definitions
+├── core/               # Core configuration and utilities
+│   └── config.py       # Application configuration
+├── frontend/           # Streamlit frontend
+│   └── app.py         # Main frontend application
+├── models/             # Data models
+│   └── document.py    # Document-related models
+├── services/           # Business logic services
+│   ├── document_processor.py  # Document processing service
+│   └── vector_store.py       # Vector store service
+├── main.py            # FastAPI application entry point
+└── run_frontend.py    # Frontend application entry point
+```
 
 ## Features
-- **Document Upload:** PDF, Excel, CSV, PowerPoint, and text files
-- **RAG Chat:** Ask questions about your documents
-- **Local LLM:** Uses Llama 3.3 via Ollama
-- **Web UI:** Simple chat interface with source viewing
 
----
-
-## Prerequisites
-- Python 3.9+
-- [Ollama](https://ollama.com/) installed and running locally
-- Llama 3.3 model pulled in Ollama (`ollama pull llama3:3.3`)
-- [Homebrew](https://brew.sh/) (for macOS users)
-- `libmagic` system library (for file type detection)
-
-### Install libmagic (macOS)
-```sh
-brew install libmagic
-```
-
----
+- Document processing for PDF, Excel, and PowerPoint files
+- AI-powered document analysis and querying
+- Modern web interface with real-time chat
+- Document collection management
+- Vector-based semantic search
 
 ## Setup
-1. **Clone the repository and enter the project directory:**
-   ```sh
-   git clone <your-repo-url>
-   cd jupyter-cursor-project
-   ```
 
-2. **Create and activate a virtual environment:**
-   ```sh
-   python3 -m venv .venv
-   source .venv/bin/activate
-   ```
-
-3. **Install dependencies:**
-   ```sh
-   pip install -e .
-   ```
-
----
-
-## Running the Application
-
-### 1. Start Ollama with Llama 3.3
-Make sure Ollama is running and the Llama 3.3 model is available:
-```sh
-ollama run llama3:3.3
+1. Install dependencies:
+```bash
+pip install -r requirements.txt
 ```
 
-### 2. Start the Backend (FastAPI)
-```sh
-uvicorn ng-notebook.main:app --reload
+2. Start the backend server:
+```bash
+python -m src.ng-notebook.main
 ```
-The backend will be available at [http://localhost:8000](http://localhost:8000)
 
-### 3. Start the Frontend (Streamlit)
-```sh
-streamlit run src/ng-notebook/app.py
+3. Start the frontend:
+```bash
+python -m src.ng-notebook.run_frontend
 ```
-The frontend will open in your browser (usually at [http://localhost:8501](http://localhost:8501))
-
----
 
 ## Usage
-1. **Upload a document** (PDF, Excel, CSV, PowerPoint, or text file) in the web UI.
-2. **Ask questions** about the content of your document.
-3. **View sources** for each answer in the chat.
 
----
+1. Open your browser and navigate to `http://localhost:8501`
+2. Upload your documents using the sidebar
+3. Ask questions about your documents in the chat interface
+4. View document collections and statistics in the sidebar
 
-## Troubleshooting
-- If you see `ImportError: failed to find libmagic. Check your installation`, make sure you have installed `libmagic` and, if needed, set the `MAGIC_LIBRARY` environment variable:
-  ```sh
-  export MAGIC_LIBRARY=/opt/homebrew/lib/libmagic.dylib
-  ```
-- Ensure Ollama is running and the Llama 3.3 model is available.
+## Development
 
----
+The project is structured into several key components:
+
+- **API**: FastAPI routes for handling file uploads and queries
+- **Services**: Core business logic for document processing and vector storage
+- **Frontend**: Streamlit-based user interface
+- **Models**: Pydantic models for data validation and serialization
 
 ## License
+
 MIT 

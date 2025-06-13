@@ -1,0 +1,36 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ng-notebook"
+version = "0.1.0"
+authors = [
+    { name = "Yuanheng Fan", email = "yuanheng_fan@neogenesis.au" },
+]
+description = "A document chat application using LangChain and Llama 3.3"
+requires-python = ">=3.9"
+dependencies = [
+    "jupyter>=1.0.0",
+    "pandas>=2.1.0",
+    "numpy>=1.25.0",
+    "matplotlib>=3.8.0",
+    "seaborn>=0.13.0",
+    "scikit-learn>=1.2.0",
+    "unstructured>=0.10.0",
+    "python-magic>=0.4.27",
+    "python-pptx>=0.6.21",
+    "langchain-community>=0.0.10",
+    "fastapi>=0.109.0",
+    "uvicorn>=0.27.0",
+    "streamlit>=1.31.0",
+    "python-multipart>=0.0.9",
+    "chromadb>=0.4.22",
+    "PyPDF2>=3.0.0",
+    "openpyxl>=3.1.2",
+    "requests>=2.31.0"
+]
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+packages = ["ng-notebook"]

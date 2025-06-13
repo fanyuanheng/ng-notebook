@@ -1,5 +1,5 @@
 import os
-from typing import List, Optional
+from typing import List
 from fastapi import FastAPI, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -16,7 +16,6 @@ import pandas as pd
 from pptx import Presentation
 import PyPDF2
 import magic
-import chromadb
 
 # Initialize FastAPI app
 app = FastAPI()
@@ -37,7 +36,8 @@ embeddings = OllamaEmbeddings(model="all-minilm")
 # Initialize Chroma as the vector store
 vector_store = Chroma(
     embedding_function=embeddings,
-    persist_directory="./chroma_db"
+    persist_directory="./chroma_db",
+    collection_metadata={"hnsw:space": "cosine"}  # Use cosine similarity
 )
 
 # Initialize conversation memory
@@ -136,12 +136,21 @@ async def chat(request: ChatRequest):
     if vector_store is None:
         return {"response": "Please upload a document first."}
     
-    # Create conversation chain
+    # Create conversation chain with improved retrieval
     qa_chain = ConversationalRetrievalChain.from_llm(
         llm=llm,
-        retriever=vector_store.as_retriever(),
+        retriever=vector_store.as_retriever(
+            search_type="similarity",  # Use similarity search
+            search_kwargs={
+                "k": 3,  # Number of documents to retrieve
+                "fetch_k": 5,  # Fetch more documents initially for better selection
+                "maximal_marginal_relevance": True,  # Use MMR to ensure diversity
+                "filter": None  # No filtering by default
+            }
+        ),
         memory=memory,
-        return_source_documents=True
+        return_source_documents=True,
+        verbose=True  # Enable verbose output for debugging
     )
     
     # Get response

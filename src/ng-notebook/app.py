@@ -1,7 +1,5 @@
 import streamlit as st
 import requests
-from typing import List
-import json
 
 # Configure Streamlit page
 st.set_page_config(

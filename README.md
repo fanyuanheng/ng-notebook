@@ -23,6 +23,53 @@ src/ng-notebook/
 └── main.py            # FastAPI application entry point
 ```
 
+## Key Dependencies
+
+- **LangChain**: Framework for building LLM applications
+- **Ollama**: Local LLM server for running open-source models
+- **Chroma**: Vector database for storing and retrieving document embeddings
+
+## How It Works
+
+This application implements a Retrieval-Augmented Generation (RAG) system using three main technologies:
+
+1. **LangChain**
+   - Provides the framework for building the RAG pipeline
+   - Handles document loading, chunking, and processing
+   - Manages the conversation chain with memory
+   - Integrates with Ollama for LLM interactions
+   - Connects with Chroma for vector storage
+
+2. **Ollama**
+   - Runs the local LLM (Llama2) for text generation
+   - Provides embeddings for document chunks
+   - Enables offline, private document processing
+   - Handles the conversation context and responses
+
+3. **Chroma**
+   - Stores document chunks as vector embeddings
+   - Enables semantic search across documents
+   - Maintains metadata for each document chunk
+   - Provides efficient similarity search
+
+### RAG Pipeline
+
+1. **Document Processing**
+   - Documents are uploaded and processed by LangChain
+   - Content is split into chunks for better context management
+   - Each chunk is converted to embeddings using Ollama
+
+2. **Vector Storage**
+   - Embeddings are stored in Chroma with metadata
+   - Enables efficient semantic search across documents
+   - Maintains document context and relationships
+
+3. **Query Processing**
+   - User questions are converted to embeddings
+   - Chroma finds relevant document chunks
+   - Ollama generates responses using retrieved context
+   - LangChain manages the conversation flow
+
 ## Features
 
 - Document processing for PDF, Excel, and PowerPoint files

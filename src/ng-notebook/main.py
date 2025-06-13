@@ -18,6 +18,8 @@ import PyPDF2
 import magic
 from langchain.prompts import PromptTemplate
 import shutil
+import chromadb
+from chromadb.config import Settings
 from langchain_community.vectorstores.utils import filter_complex_metadata
 
 # Initialize FastAPI app
@@ -32,15 +34,34 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Track uploaded documents
+uploaded_documents = set()
+
 # Initialize Ollama
 llm = Ollama(model="llama3.3:latest")
 embeddings = OllamaEmbeddings(model="all-minilm")
 
+# Ensure chroma_db directory exists and has proper permissions
+CHROMA_DB_DIR = "./chroma_db"
+if not os.path.exists(CHROMA_DB_DIR):
+    os.makedirs(CHROMA_DB_DIR, mode=0o777)
+
+# Initialize Chroma client with proper settings
+chroma_client = chromadb.PersistentClient(
+    path=CHROMA_DB_DIR,
+    settings=Settings(
+        anonymized_telemetry=False,
+        allow_reset=True,
+        is_persistent=True
+    )
+)
+
 # Initialize Chroma as the vector store
 vector_store = Chroma(
+    client=chroma_client,
     embedding_function=embeddings,
-    persist_directory="./chroma_db",
-    collection_metadata={"hnsw:space": "cosine"}  # Use cosine similarity
+    collection_name="documents",
+    persist_directory=CHROMA_DB_DIR
 )
 
 # Initialize conversation memory
@@ -200,7 +221,11 @@ def clean_metadata(metadata: dict) -> dict:
 @app.post("/upload")
 async def upload_file(file: UploadFile = File(...)):
     """Handle file upload and process it for RAG."""
-    global vector_store
+    global vector_store, uploaded_documents
+    
+    # Check if file has already been uploaded
+    if file.filename in uploaded_documents:
+        return {"message": "File already uploaded"}
     
     # Create a temporary file
     with tempfile.NamedTemporaryFile(delete=False) as temp_file:
@@ -224,19 +249,14 @@ async def upload_file(file: UploadFile = File(...)):
             # Clean metadata to ensure all values are simple types
             chunk["metadata"] = clean_metadata(chunk["metadata"])
         
-        # Create or update vector store
-        if vector_store is None:
-            vector_store = Chroma.from_texts(
-                [chunk["content"] for chunk in chunks],
-                embeddings,
-                persist_directory="./chroma_db",
-                metadatas=[chunk["metadata"] for chunk in chunks]
-            )
-        else:
-            vector_store.add_texts(
-                [chunk["content"] for chunk in chunks],
-                metadatas=[chunk["metadata"] for chunk in chunks]
-            )
+        # Add texts to vector store
+        vector_store.add_texts(
+            [chunk["content"] for chunk in chunks],
+            metadatas=[chunk["metadata"] for chunk in chunks]
+        )
+        
+        # Add to uploaded documents set
+        uploaded_documents.add(file.filename)
         
         return {"message": "File processed successfully"}
     
@@ -290,14 +310,33 @@ async def chat(request: ChatRequest):
 @app.post("/clear-db")
 async def clear_database():
     """Clear the Chroma database."""
-    global vector_store
+    global vector_store, uploaded_documents
     try:
         # Delete the Chroma database directory
-        if os.path.exists("./chroma_db"):
-            shutil.rmtree("./chroma_db")
+        if os.path.exists(CHROMA_DB_DIR):
+            shutil.rmtree(CHROMA_DB_DIR)
+            os.makedirs(CHROMA_DB_DIR, mode=0o777)
+        
+        # Reinitialize Chroma client
+        chroma_client = chromadb.PersistentClient(
+            path=CHROMA_DB_DIR,
+            settings=Settings(
+                anonymized_telemetry=False,
+                allow_reset=True,
+                is_persistent=True
+            )
+        )
         
         # Reset the vector store
-        vector_store = None
+        vector_store = Chroma(
+            client=chroma_client,
+            embedding_function=embeddings,
+            collection_name="documents",
+            persist_directory=CHROMA_DB_DIR
+        )
+        
+        # Clear uploaded documents set
+        uploaded_documents.clear()
         
         return {"message": "Database cleared successfully"}
     except Exception as e:
@@ -330,7 +369,8 @@ async def get_collections():
             "total_documents": count,
             "unique_sources": list(unique_sources),
             "document_types": list(unique_types),
-            "collection_name": collection.name
+            "collection_name": collection.name,
+            "uploaded_files": list(uploaded_documents)
         }
     except Exception as e:
         return {"error": f"Error getting collections: {str(e)}"}

@@ -9,24 +9,12 @@ import re
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_community.document_loaders import UnstructuredPowerPointLoader
 from ..core.config import CHUNK_SIZE, CHUNK_OVERLAP
-from .sqlite_store import SQLiteStore
+from .sqlite_store import SQLiteStore, sanitize_table_name
 import sqlite3
 from langchain.schema import Document
 
 # Get logger
 logger = logging.getLogger(__name__)
-
-def sanitize_table_name(name: str) -> str:
-    """Sanitize a string to be used as a SQLite table name."""
-    # Replace any non-alphanumeric characters with underscore
-    sanitized = re.sub(r'[^a-zA-Z0-9]', '_', name)
-    # Ensure the name starts with a letter
-    if not sanitized[0].isalpha():
-        sanitized = 't_' + sanitized
-    # Ensure the name is not too long
-    if len(sanitized) > 63:  # SQLite's default limit
-        sanitized = sanitized[:63]
-    return sanitized.lower()
 
 class DocumentProcessor:
     def __init__(self, sqlite_store: SQLiteStore = None):
@@ -56,7 +44,7 @@ class DocumentProcessor:
             ]:
                 logger.info("Processing Excel file")
                 # Store in SQLite first
-                self.sqlite_store.add_excel_file(file_path, file_type)
+                result = self.sqlite_store.add_excel_file(file_path)
                 
                 # Create summary chunks for vector store
                 chunks = []
@@ -65,21 +53,21 @@ class DocumentProcessor:
                     cursor.execute("SELECT id FROM uploaded_files WHERE filename = ?", (os.path.basename(file_path),))
                     file_id = cursor.fetchone()[0]
                     
-                    cursor.execute("SELECT sheet_name, num_rows, num_columns FROM excel_sheets WHERE file_id = ?", (file_id,))
+                    cursor.execute("SELECT sheet_name, row_count, column_count FROM excel_sheets WHERE file_id = ?", (file_id,))
                     sheets = cursor.fetchall()
                     
-                    for sheet_name, num_rows, num_columns in sheets:
-                        # Sanitize the table name
+                    for sheet_name, row_count, column_count in sheets:
+                        # Get table name
                         safe_sheet_name = sanitize_table_name(sheet_name)
-                        table_name = f"excel_data_{file_id}_{safe_sheet_name}"
-                        logger.debug(f"Using sanitized table name: {table_name}")
+                        table_name = f"excel_{file_id}_{safe_sheet_name}"
+                        logger.debug(f"Using table name: {table_name}")
                         
                         try:
                             df = pd.read_sql(f"SELECT * FROM {table_name}", conn)
                             
                             # Create a summary of the sheet
                             summary = f"Sheet: {sheet_name}\n"
-                            summary += f"Rows: {num_rows}, Columns: {num_columns}\n"
+                            summary += f"Rows: {row_count}, Columns: {column_count}\n"
                             summary += f"Columns: {', '.join(df.columns)}\n"
                             summary += f"First few rows:\n{df.head().to_string()}"
                             
@@ -89,8 +77,8 @@ class DocumentProcessor:
                                     "source": file_path,
                                     "file_type": file_type,
                                     "sheet_name": sheet_name,
-                                    "num_rows": num_rows,
-                                    "num_columns": num_columns
+                                    "row_count": row_count,
+                                    "column_count": column_count
                                 }
                             )
                             chunks.append(doc)
@@ -108,7 +96,7 @@ class DocumentProcessor:
             elif file_type in ["text/csv", "application/csv", "text/x-csv", "application/x-csv", "text/comma-separated-values"]:
                 logger.info("Processing CSV file")
                 # Store in SQLite first
-                self.sqlite_store.add_csv_file(file_path, file_type)
+                result = self.sqlite_store.add_csv_file(file_path)
                 
                 # Create summary chunk for vector store
                 with sqlite3.connect(self.sqlite_store.db_path) as conn:
@@ -116,10 +104,10 @@ class DocumentProcessor:
                     cursor.execute("SELECT id FROM uploaded_files WHERE filename = ?", (os.path.basename(file_path),))
                     file_id = cursor.fetchone()[0]
                     
-                    # Sanitize the table name
+                    # Get table name
                     safe_filename = sanitize_table_name(os.path.basename(file_path))
-                    table_name = f"csv_data_{file_id}_{safe_filename}"
-                    logger.debug(f"Using sanitized table name: {table_name}")
+                    table_name = f"csv_{file_id}_{safe_filename}"
+                    logger.debug(f"Using table name: {table_name}")
                     
                     try:
                         df = pd.read_sql(f"SELECT * FROM {table_name}", conn)
@@ -135,8 +123,8 @@ class DocumentProcessor:
                             metadata={
                                 "source": file_path,
                                 "file_type": file_type,
-                                "num_rows": len(df),
-                                "num_columns": len(df.columns)
+                                "row_count": len(df),
+                                "column_count": len(df.columns)
                             }
                         )
                         return [doc]

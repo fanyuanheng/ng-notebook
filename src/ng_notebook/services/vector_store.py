@@ -9,9 +9,11 @@ from ..core.config import CHROMA_DB_DIR, LLM_MODEL, EMBEDDING_MODEL
 from .sqlite_store import SQLiteStore
 from .document_processor import DocumentProcessor
 import logging
+import os
+from pathlib import Path
 
-# Get logger
-logger = logging.getLogger(__name__)
+# Get the dedicated vector store logger
+logger = logging.getLogger('ng_notebook.services.vector_store')
 
 # Initialize services
 _vector_store: Optional[Chroma] = None
@@ -33,24 +35,36 @@ def get_llm() -> Ollama:
     return _llm
 
 def get_vector_store() -> Chroma:
-    """Get or create the vector store instance."""
+    """
+    Get or create the vector store instance using a singleton pattern.
+    Returns:
+        Chroma: The vector store instance
+    """
     global _vector_store
+    
     if _vector_store is None:
-        logger.info("Initializing vector store")
         try:
-            # Initialize embeddings with all-minilm
-            embeddings = OllamaEmbeddings(model=EMBEDDING_MODEL)
-            logger.info(f"Initialized embeddings with model: {EMBEDDING_MODEL}")
+            logger.info("Initializing vector store with directory: %s", CHROMA_DB_DIR)
             
-            # Initialize vector store
+            # Ensure the directory exists with proper permissions
+            os.makedirs(CHROMA_DB_DIR, exist_ok=True)
+            os.chmod(CHROMA_DB_DIR, 0o755)
+            
+            # Initialize embeddings
+            embeddings = OllamaEmbeddings(model=EMBEDDING_MODEL)
+            logger.debug("Initialized embeddings with model: %s", EMBEDDING_MODEL)
+            
+            # Initialize Chroma
             _vector_store = Chroma(
                 persist_directory=str(CHROMA_DB_DIR),
                 embedding_function=embeddings
             )
             logger.info("Vector store initialized successfully")
+            
         except Exception as e:
-            logger.error(f"Error initializing vector store: {str(e)}", exc_info=True)
+            logger.error("Failed to initialize vector store: %s", str(e), exc_info=True)
             raise
+    
     return _vector_store
 
 def get_sqlite_store() -> SQLiteStore:
@@ -186,4 +200,73 @@ class VectorStore:
             "unique_sources": unique_sources,
             "samples": samples,
             "sqlite_metadata": sqlite_metadata
-        } 
+        }
+
+def add_documents(documents: List[str], metadatas: Optional[List[dict]] = None) -> None:
+    """
+    Add documents to the vector store.
+    Args:
+        documents (List[str]): List of document texts to add
+        metadatas (Optional[List[dict]]): List of metadata dictionaries for each document
+    """
+    try:
+        vector_store = get_vector_store()
+        logger.info("Adding %d documents to vector store", len(documents))
+        
+        if metadatas:
+            logger.debug("Adding documents with metadata")
+            vector_store.add_texts(texts=documents, metadatas=metadatas)
+        else:
+            logger.debug("Adding documents without metadata")
+            vector_store.add_texts(texts=documents)
+            
+        logger.info("Successfully added documents to vector store")
+        
+    except Exception as e:
+        logger.error("Failed to add documents to vector store: %s", str(e), exc_info=True)
+        raise
+
+def search_documents(query: str, k: int = 4) -> List[dict]:
+    """
+    Search for similar documents in the vector store.
+    Args:
+        query (str): The search query
+        k (int): Number of results to return
+    Returns:
+        List[dict]: List of similar documents with their metadata
+    """
+    try:
+        vector_store = get_vector_store()
+        logger.info("Searching vector store for query: %s", query)
+        
+        results = vector_store.similarity_search_with_score(query, k=k)
+        logger.debug("Found %d results", len(results))
+        
+        return [
+            {
+                "content": doc.page_content,
+                "metadata": doc.metadata,
+                "score": score
+            }
+            for doc, score in results
+        ]
+        
+    except Exception as e:
+        logger.error("Failed to search vector store: %s", str(e), exc_info=True)
+        raise
+
+def clear_vector_store() -> None:
+    """
+    Clear all documents from the vector store.
+    """
+    try:
+        vector_store = get_vector_store()
+        logger.info("Clearing vector store")
+        
+        vector_store.delete_collection()
+        vector_store = None
+        logger.info("Vector store cleared successfully")
+        
+    except Exception as e:
+        logger.error("Failed to clear vector store: %s", str(e), exc_info=True)
+        raise 

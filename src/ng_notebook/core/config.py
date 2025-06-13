@@ -5,16 +5,33 @@ import logging
 # Configure logging
 LOG_DIR = Path(__file__).resolve().parent.parent / "logs"
 LOG_DIR.mkdir(exist_ok=True)
-LOG_FILE = LOG_DIR / "app.log"
+APP_LOG_FILE = LOG_DIR / "app.log"
+VECTOR_STORE_LOG_FILE = LOG_DIR / "chroma_db.log"
+SQLITE_LOG_FILE = LOG_DIR / "sqlite_db.log"
 
+# Configure root logger
 logging.basicConfig(
-    level=logging.DEBUG,
+    level=logging.INFO,  # Set root logger to INFO to reduce console output
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
-        logging.FileHandler(LOG_FILE),
+        logging.FileHandler(APP_LOG_FILE),
         logging.StreamHandler()
     ]
 )
+
+# Configure vector store logger
+vector_store_logger = logging.getLogger('ng_notebook.services.vector_store')
+vector_store_logger.setLevel(logging.DEBUG)
+vector_store_handler = logging.FileHandler(VECTOR_STORE_LOG_FILE)
+vector_store_handler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
+vector_store_logger.addHandler(vector_store_handler)
+
+# Configure SQLite store logger
+sqlite_logger = logging.getLogger('ng_notebook.services.sqlite_store')
+sqlite_logger.setLevel(logging.DEBUG)
+sqlite_handler = logging.FileHandler(SQLITE_LOG_FILE)
+sqlite_handler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
+sqlite_logger.addHandler(sqlite_handler)
 
 # Base paths
 BASE_DIR = Path(__file__).resolve().parent.parent

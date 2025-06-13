@@ -19,6 +19,42 @@ This application allows you to chat with your documents using Llama 3.3.
 Upload PDF, Excel, CSV, or PowerPoint files to get started.
 """)
 
+# Add database management buttons
+col1, col2 = st.columns(2)
+with col1:
+    if st.button("Clear Database", type="secondary"):
+        response = requests.post("http://localhost:8000/clear-db")
+        if response.status_code == 200:
+            st.success("Database cleared successfully!")
+            # Clear chat history
+            st.session_state.messages = []
+        else:
+            st.error("Error clearing database. Please try again.")
+
+with col2:
+    if st.button("View Collections", type="secondary"):
+        response = requests.get("http://localhost:8000/collections")
+        if response.status_code == 200:
+            data = response.json()
+            if "error" in data:
+                st.error(data["error"])
+            else:
+                with st.expander("Collection Information", expanded=True):
+                    st.write(f"**Collection Name:** {data['collection_name']}")
+                    st.write(f"**Total Documents:** {data['total_documents']}")
+                    
+                    if data['unique_sources']:
+                        st.write("**Uploaded Files:**")
+                        for source in data['unique_sources']:
+                            st.write(f"- {source}")
+                    
+                    if data['document_types']:
+                        st.write("**Document Types:**")
+                        for doc_type in data['document_types']:
+                            st.write(f"- {doc_type}")
+        else:
+            st.error("Error fetching collection information. Please try again.")
+
 # File uploader
 uploaded_file = st.file_uploader(
     "Upload a document",

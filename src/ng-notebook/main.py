@@ -16,6 +16,9 @@ import pandas as pd
 from pptx import Presentation
 import PyPDF2
 import magic
+from langchain.prompts import PromptTemplate
+import shutil
+from langchain_community.vectorstores.utils import filter_complex_metadata
 
 # Initialize FastAPI app
 app = FastAPI()
@@ -47,10 +50,12 @@ memory = ConversationBufferMemory(
     output_key="answer"
 )
 
-# Initialize text splitter
+# Initialize text splitter with better chunking strategy
 text_splitter = RecursiveCharacterTextSplitter(
     chunk_size=1000,
-    chunk_overlap=200
+    chunk_overlap=200,
+    length_function=len,
+    separators=["\n\n", "\n", ".", "!", "?", ",", " ", ""]
 )
 
 class ChatMessage(BaseModel):
@@ -61,15 +66,15 @@ class ChatRequest(BaseModel):
     message: str
     chat_history: List[ChatMessage]
 
-def process_document(file_path: str, file_type: str) -> str:
-    """Process different types of documents and return text content."""
+def process_document(file_path: str, file_type: str) -> List[dict]:
+    """Process different types of documents and return list of chunks with metadata."""
     if file_type == "application/pdf":
         with open(file_path, 'rb') as file:
             pdf_reader = PyPDF2.PdfReader(file)
             text = ""
             for page in pdf_reader.pages:
-                text += page.extract_text()
-            return text
+                text += page.extract_text() + "\n"
+            return [{"content": text, "metadata": {"type": "pdf"}}]
     
     elif file_type == "application/vnd.openxmlformats-officedocument.presentationml.presentation":
         prs = Presentation(file_path)
@@ -78,20 +83,119 @@ def process_document(file_path: str, file_type: str) -> str:
             for shape in slide.shapes:
                 if hasattr(shape, "text"):
                     text += shape.text + "\n"
-        return text
+        return [{"content": text, "metadata": {"type": "pptx"}}]
     
     elif file_type in ["text/csv", "application/vnd.ms-excel", 
                        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"]:
-        df = pd.read_csv(file_path) if file_type == "text/csv" else pd.read_excel(file_path)
         chunks = []
-        for sheet_name in pd.ExcelFile(file_path).sheet_names:
-            df = pd.read_excel(file_path, sheet_name=sheet_name)
-            chunks.append(f"Sheet: {sheet_name}\n{df.to_string()}")
-        return "\n".join(chunks)
+        try:
+            excel_file = pd.ExcelFile(file_path)
+            
+            for sheet_name in excel_file.sheet_names:
+                df = pd.read_excel(file_path, sheet_name=sheet_name)
+                
+                # Add sheet metadata as a separate chunk
+                sheet_metadata = {
+                    "content": f"Sheet: {sheet_name}\n"
+                              f"Number of rows: {len(df)}\n"
+                              f"Number of columns: {len(df.columns)}\n"
+                              f"Column names: {', '.join(df.columns)}",
+                    "metadata": {
+                        "type": "excel_metadata",
+                        "sheet": sheet_name,
+                        "row_count": str(len(df)),
+                        "column_count": str(len(df.columns))
+                    }
+                }
+                chunks.append(sheet_metadata)
+                
+                # Process each column's statistics
+                for column in df.columns:
+                    try:
+                        if pd.api.types.is_numeric_dtype(df[column]):
+                            stats = df[column].describe()
+                            stats_text = f"Statistics for {column}:\n"
+                            if 'mean' in stats:
+                                stats_text += f"Mean: {stats['mean']:.2f}\n"
+                            if '50%' in stats:
+                                stats_text += f"Median: {stats['50%']:.2f}\n"
+                            if 'min' in stats:
+                                stats_text += f"Min: {stats['min']:.2f}\n"
+                            if 'max' in stats:
+                                stats_text += f"Max: {stats['max']:.2f}\n"
+                            stats_text += f"Non-null values: {df[column].count()}"
+                            
+                            chunks.append({
+                                "content": stats_text,
+                                "metadata": {
+                                    "type": "excel_stats",
+                                    "sheet": sheet_name,
+                                    "column": column,
+                                    "data_type": "numeric"
+                                }
+                            })
+                        else:
+                            value_counts = df[column].value_counts().head(5)
+                            stats_text = f"Top 5 values in {column}:\n"
+                            for value, count in value_counts.items():
+                                stats_text += f"{value}: {count}\n"
+                            stats_text += f"Non-null values: {df[column].count()}"
+                            
+                            chunks.append({
+                                "content": stats_text,
+                                "metadata": {
+                                    "type": "excel_stats",
+                                    "sheet": sheet_name,
+                                    "column": column,
+                                    "data_type": "categorical"
+                                }
+                            })
+                    except Exception as e:
+                        chunks.append({
+                            "content": f"Error processing column {column}: {str(e)}",
+                            "metadata": {
+                                "type": "excel_error",
+                                "sheet": sheet_name,
+                                "column": column
+                            }
+                        })
+                
+                # Process each row as a separate chunk
+                for idx, row in df.iterrows():
+                    row_data = {col: str(val) for col, val in row.items()}
+                    chunks.append({
+                        "content": f"Row {idx + 1}:\n" + "\n".join(f"{col}: {val}" for col, val in row_data.items()),
+                        "metadata": {
+                            "type": "excel_row",
+                            "sheet": sheet_name,
+                            "row_index": str(idx),
+                            "columns": ",".join(df.columns)  # Convert list to string
+                        }
+                    })
+            
+            return chunks
+        except Exception as e:
+            return [{
+                "content": f"Error processing Excel file: {str(e)}",
+                "metadata": {"type": "error"}
+            }]
     
     else:
         with open(file_path, 'r', encoding='utf-8') as file:
-            return file.read()
+            text = file.read()
+            return [{"content": text, "metadata": {"type": "text"}}]
+
+def clean_metadata(metadata: dict) -> dict:
+    """Clean metadata to ensure all values are simple types."""
+    cleaned = {}
+    for key, value in metadata.items():
+        if isinstance(value, (str, int, float, bool)) or value is None:
+            cleaned[key] = value
+        elif isinstance(value, list):
+            cleaned[key] = ",".join(str(x) for x in value)
+        else:
+            cleaned[key] = str(value)
+    return cleaned
 
 @app.post("/upload")
 async def upload_file(file: UploadFile = File(...)):
@@ -109,20 +213,30 @@ async def upload_file(file: UploadFile = File(...)):
         file_type = magic.from_file(temp_file_path, mime=True)
         
         # Process the document
-        text = process_document(temp_file_path, file_type)
+        chunks = process_document(temp_file_path, file_type)
         
-        # Split text into chunks
-        chunks = text_splitter.split_text(text)
+        # Add file metadata to each chunk and clean metadata
+        for chunk in chunks:
+            chunk["metadata"].update({
+                "source": file.filename,
+                "file_type": file_type
+            })
+            # Clean metadata to ensure all values are simple types
+            chunk["metadata"] = clean_metadata(chunk["metadata"])
         
         # Create or update vector store
         if vector_store is None:
             vector_store = Chroma.from_texts(
-                chunks,
+                [chunk["content"] for chunk in chunks],
                 embeddings,
-                persist_directory="./chroma_db"
+                persist_directory="./chroma_db",
+                metadatas=[chunk["metadata"] for chunk in chunks]
             )
         else:
-            vector_store.add_texts(chunks)
+            vector_store.add_texts(
+                [chunk["content"] for chunk in chunks],
+                metadatas=[chunk["metadata"] for chunk in chunks]
+            )
         
         return {"message": "File processed successfully"}
     
@@ -147,7 +261,22 @@ async def chat(request: ChatRequest):
         ),
         memory=memory,
         return_source_documents=True,
-        verbose=True  # Enable verbose output for debugging
+        verbose=True,  # Enable verbose output for debugging
+        combine_docs_chain_kwargs={
+            "prompt": PromptTemplate(
+                template="""You are a helpful AI assistant. Use the following pieces of context to answer the question at the end. 
+                If you don't know the answer, just say that you don't know, don't try to make up an answer.
+                
+                Context: {context}
+                
+                Chat History: {chat_history}
+                
+                Question: {question}
+                
+                Answer:""",
+                input_variables=["context", "chat_history", "question"]
+            )
+        }
     )
     
     # Get response
@@ -157,6 +286,54 @@ async def chat(request: ChatRequest):
         "response": response["answer"],
         "sources": [doc.page_content for doc in response["source_documents"]]
     }
+
+@app.post("/clear-db")
+async def clear_database():
+    """Clear the Chroma database."""
+    global vector_store
+    try:
+        # Delete the Chroma database directory
+        if os.path.exists("./chroma_db"):
+            shutil.rmtree("./chroma_db")
+        
+        # Reset the vector store
+        vector_store = None
+        
+        return {"message": "Database cleared successfully"}
+    except Exception as e:
+        return {"error": f"Error clearing database: {str(e)}"}
+
+@app.get("/collections")
+async def get_collections():
+    """Get information about Chroma collections."""
+    try:
+        if vector_store is None:
+            return {"collections": [], "message": "No collections found"}
+        
+        # Get collection information
+        collection = vector_store._collection
+        count = collection.count()
+        
+        # Get unique metadata values
+        metadata = collection.get()["metadatas"]
+        unique_sources = set()
+        unique_types = set()
+        
+        for meta in metadata:
+            if meta:
+                if "source" in meta:
+                    unique_sources.add(meta["source"])
+                if "type" in meta:
+                    unique_types.add(meta["type"])
+        
+        return {
+            "total_documents": count,
+            "unique_sources": list(unique_sources),
+            "document_types": list(unique_types),
+            "collection_name": collection.name
+        }
+    except Exception as e:
+        return {"error": f"Error getting collections: {str(e)}"}
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000) 

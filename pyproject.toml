@@ -3,7 +3,7 @@ requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "ng-notebook"
+name = "ng_notebook"
 version = "0.1.0"
 authors = [
     { name = "Yuanheng Fan", email = "yuanheng_fan@neogenesis.au" },
@@ -33,4 +33,4 @@ dependencies = [
 
 [tool.setuptools]
 package-dir = {"" = "src"}
-packages = ["ng-notebook"]
+packages = ["ng_notebook"]

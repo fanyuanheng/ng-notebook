@@ -76,6 +76,9 @@ coverage.xml
 # Chroma Database
 chroma_db/
 
+# SQLite Database
+sqlite_db/
+
 # Temporary files
 *.tmp
 *.bak

@@ -12,8 +12,9 @@ class Document(BaseModel):
 
 class Query(BaseModel):
     question: str
-    chat_history: Optional[List[Dict[str, str]]] = None
+    chat_history: Optional[List[Dict]] = None
 
 class QueryResponse(BaseModel):
     answer: str
-    source_documents: List[Dict[str, str]] 
+    sources: List[Dict] = []
+    sqlite_results: List[Dict] = [] 

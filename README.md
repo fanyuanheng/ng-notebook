@@ -35,17 +35,17 @@ src/ng-notebook/
 
 1. Install dependencies:
 ```bash
-pip install -r requirements.txt
+pip install -e .
 ```
 
 2. Start the backend server:
 ```bash
-python -m src.ng-notebook.main
+uvicorn ng-notebook.main:app --reload
 ```
 
 3. Start the frontend:
 ```bash
-streamlit run src/ng-notebook/frontend/app.py
+streamlit run src/ng-notebook/app.py
 ```
 
 ## Usage

@@ -11,14 +11,16 @@ src/ng-notebook/
 ├── core/               # Core configuration and utilities
 │   └── config.py       # Application configuration
 ├── frontend/           # Streamlit frontend
-│   └── app.py         # Main frontend application
+│   ├── app.py         # Main frontend application
+│   ├── static/        # Static assets
+│   │   └── css/      # CSS styles
+│   └── templates/     # UI templates
 ├── models/             # Data models
 │   └── document.py    # Document-related models
 ├── services/           # Business logic services
 │   ├── document_processor.py  # Document processing service
 │   └── vector_store.py       # Vector store service
-├── main.py            # FastAPI application entry point
-└── run_frontend.py    # Frontend application entry point
+└── main.py            # FastAPI application entry point
 ```
 
 ## Features
@@ -43,7 +45,7 @@ python -m src.ng-notebook.main
 
 3. Start the frontend:
 ```bash
-python -m src.ng-notebook.run_frontend
+streamlit run src/ng-notebook/frontend/app.py
 ```
 
 ## Usage
@@ -59,7 +61,7 @@ The project is structured into several key components:
 
 - **API**: FastAPI routes for handling file uploads and queries
 - **Services**: Core business logic for document processing and vector storage
-- **Frontend**: Streamlit-based user interface
+- **Frontend**: Streamlit-based user interface with modular templates and styles
 - **Models**: Pydantic models for data validation and serialization
 
 ## License

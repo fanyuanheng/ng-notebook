@@ -622,7 +622,7 @@ async def clear_database():
 
 @app.get("/collections")
 async def get_collections():
-    """Get information about Chroma collections."""
+    """Get detailed information about Chroma collections."""
     try:
         if vector_store is None:
             return {"collections": [], "message": "No collections found"}
@@ -631,24 +631,52 @@ async def get_collections():
         collection = vector_store._collection
         count = collection.count()
         
-        # Get unique metadata values
-        metadata = collection.get()["metadatas"]
+        # Get all documents and metadata
+        results = collection.get()
+        documents = results["documents"]
+        metadatas = results["metadatas"]
+        
+        # Process metadata to get unique values and statistics
         unique_sources = set()
         unique_types = set()
+        type_counts = {}
+        source_counts = {}
         
-        for meta in metadata:
+        for meta in metadatas:
             if meta:
                 if "source" in meta:
                     unique_sources.add(meta["source"])
+                    source_counts[meta["source"]] = source_counts.get(meta["source"], 0) + 1
                 if "type" in meta:
                     unique_types.add(meta["type"])
+                    type_counts[meta["type"]] = type_counts.get(meta["type"], 0) + 1
+        
+        # Get document samples for each type
+        type_samples = {}
+        for doc_type in unique_types:
+            type_samples[doc_type] = []
+            for i, meta in enumerate(metadatas):
+                if meta and meta.get("type") == doc_type:
+                    type_samples[doc_type].append({
+                        "content": documents[i][:200] + "..." if len(documents[i]) > 200 else documents[i],
+                        "metadata": meta
+                    })
+                    if len(type_samples[doc_type]) >= 3:  # Limit to 3 samples per type
+                        break
         
         return {
             "total_documents": count,
             "unique_sources": list(unique_sources),
             "document_types": list(unique_types),
             "collection_name": collection.name,
-            "uploaded_files": list(uploaded_documents)
+            "uploaded_files": list(uploaded_documents),
+            "type_statistics": {
+                "counts": type_counts,
+                "samples": type_samples
+            },
+            "source_statistics": {
+                "counts": source_counts
+            }
         }
     except Exception as e:
         return {"error": f"Error getting collections: {str(e)}"}

@@ -1,22 +1,175 @@
 import streamlit as st
 import requests
+import pandas as pd
+from typing import Dict, List, Any
 
-# Configure Streamlit page
+# Custom CSS styling
 st.set_page_config(
-    page_title="Document Chat",
-    page_icon="💬",
-    layout="wide"
+    page_title="Neogenesis Notebook",
+    page_icon="📚",
+    layout="wide",
+    initial_sidebar_state="expanded"
 )
+
+# Custom CSS
+st.markdown("""
+<style>
+    /* Main title styling */
+    .main .title {
+        color: #1E88E5;
+        font-size: 3rem !important;
+        font-weight: 700 !important;
+        margin-bottom: 0.5rem !important;
+    }
+    
+    /* Subtitle styling */
+    .main .subtitle {
+        color: #424242;
+        font-size: 1.5rem !important;
+        font-weight: 400 !important;
+        margin-bottom: 2rem !important;
+    }
+    
+    /* Card styling */
+    .stButton>button {
+        width: 100%;
+        border-radius: 10px;
+        height: 3em;
+        font-weight: 600;
+    }
+    
+    /* Chat message styling */
+    .chat-message {
+        padding: 1.5rem;
+        border-radius: 10px;
+        margin-bottom: 1rem;
+        display: flex;
+        flex-direction: row;
+        align-items: flex-start;
+        background-color: #f8f9fa;
+    }
+    
+    /* File uploader styling */
+    .stFileUploader {
+        border: 2px dashed #1E88E5;
+        border-radius: 10px;
+        padding: 1rem;
+    }
+    
+    /* Metrics styling */
+    .stMetric {
+        background-color: #f8f9fa;
+        padding: 1rem;
+        border-radius: 10px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    
+    /* Dataframe styling */
+    .stDataFrame {
+        border-radius: 10px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    
+    /* Expander styling */
+    .streamlit-expanderHeader {
+        background-color: #f8f9fa;
+        border-radius: 10px;
+        font-weight: 600;
+    }
+    
+    /* Chat input styling */
+    .stChatInput {
+        border-radius: 10px;
+        border: 2px solid #1E88E5;
+    }
+    
+    /* Success message styling */
+    .stSuccess {
+        border-radius: 10px;
+        padding: 1rem;
+    }
+    
+    /* Error message styling */
+    .stError {
+        border-radius: 10px;
+        padding: 1rem;
+    }
+</style>
+""", unsafe_allow_html=True)
 
 # Initialize session state
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
+def display_collection_details():
+    """Display detailed information about the Chroma DB collection."""
+    st.markdown('<h1 class="title">Chroma DB Collection Details</h1>', unsafe_allow_html=True)
+    
+    # Fetch collection information
+    response = requests.get("http://localhost:8000/collections")
+    if response.status_code != 200:
+        st.error("Error fetching collection information. Please try again.")
+        return
+    
+    data = response.json()
+    if "error" in data:
+        st.error(data["error"])
+        return
+    
+    # Display basic collection information
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.metric("Total Documents", data["total_documents"])
+    with col2:
+        st.metric("Document Types", len(data["document_types"]))
+    with col3:
+        st.metric("Unique Sources", len(data["unique_sources"]))
+    
+    # Display document types with counts
+    st.markdown('<h2 class="subtitle">Document Types</h2>', unsafe_allow_html=True)
+    type_data = []
+    for doc_type, count in data["type_statistics"]["counts"].items():
+        type_data.append({
+            "Type": doc_type,
+            "Count": count
+        })
+    doc_types_df = pd.DataFrame(type_data)
+    st.dataframe(doc_types_df, use_container_width=True)
+    
+    # Display document type samples
+    st.markdown('<h2 class="subtitle">Document Type Samples</h2>', unsafe_allow_html=True)
+    for doc_type, samples in data["type_statistics"]["samples"].items():
+        with st.expander(f"Sample {doc_type} Documents"):
+            for i, sample in enumerate(samples, 1):
+                st.markdown(f"**Sample {i}**")
+                st.markdown("**Content:**")
+                st.text(sample["content"])
+                st.markdown("**Metadata:**")
+                st.json(sample["metadata"])
+                st.markdown("---")
+    
+    # Display uploaded files with counts
+    st.markdown('<h2 class="subtitle">Uploaded Files</h2>', unsafe_allow_html=True)
+    file_data = []
+    for source, count in data["source_statistics"]["counts"].items():
+        file_data.append({
+            "Filename": source,
+            "Chunks": count
+        })
+    files_df = pd.DataFrame(file_data)
+    st.dataframe(files_df, use_container_width=True)
+    
+    # Add a button to refresh the data
+    if st.button("Refresh Data", type="secondary"):
+        st.experimental_rerun()
+
 # Title and description
-st.title("Document Chat with Llama 3.3")
+st.markdown('<h1 class="title">Neogenesis Notebook</h1>', unsafe_allow_html=True)
+st.markdown('<h2 class="subtitle">AI-Powered Document Analysis Platform</h2>', unsafe_allow_html=True)
 st.markdown("""
-This application allows you to chat with your documents using Llama 3.3.
-Upload PDF, Excel, CSV, or PowerPoint files to get started.
+Neogenesis Notebook is an advanced document analysis platform that combines cutting-edge AI technologies to help you understand and interact with your documents.
+
+Get started by uploading your documents and asking questions about their content.
 """)
 
 # Add database management buttons
@@ -33,31 +186,12 @@ with col1:
 
 with col2:
     if st.button("View Collections", type="secondary"):
-        response = requests.get("http://localhost:8000/collections")
-        if response.status_code == 200:
-            data = response.json()
-            if "error" in data:
-                st.error(data["error"])
-            else:
-                with st.expander("Collection Information", expanded=True):
-                    st.write(f"**Collection Name:** {data['collection_name']}")
-                    st.write(f"**Total Documents:** {data['total_documents']}")
-                    
-                    if data['unique_sources']:
-                        st.write("**Uploaded Files:**")
-                        for source in data['unique_sources']:
-                            st.write(f"- {source}")
-                    
-                    if data['document_types']:
-                        st.write("**Document Types:**")
-                        for doc_type in data['document_types']:
-                            st.write(f"- {doc_type}")
-        else:
-            st.error("Error fetching collection information. Please try again.")
+        display_collection_details()
 
 # File uploader
+st.markdown('<h2 class="subtitle">Upload Document</h2>', unsafe_allow_html=True)
 uploaded_file = st.file_uploader(
-    "Upload a document",
+    "Choose a file",
     type=["pdf", "xlsx", "csv", "pptx", "txt"],
     help="Supported formats: PDF, Excel, CSV, PowerPoint, and text files"
 )
@@ -73,8 +207,7 @@ if uploaded_file is not None:
         st.error("Error processing document. Please try again.")
 
 # Chat interface
-st.markdown("---")
-st.subheader("Chat")
+st.markdown('<h2 class="subtitle">Chat</h2>', unsafe_allow_html=True)
 
 # Display chat messages
 for message in st.session_state.messages:

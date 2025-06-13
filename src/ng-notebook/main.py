@@ -140,12 +140,9 @@ async def chat(request: ChatRequest):
     qa_chain = ConversationalRetrievalChain.from_llm(
         llm=llm,
         retriever=vector_store.as_retriever(
-            search_type="similarity",  # Use similarity search
+            search_type="similarity",
             search_kwargs={
-                "k": 3,  # Number of documents to retrieve
-                "fetch_k": 5,  # Fetch more documents initially for better selection
-                "maximal_marginal_relevance": True,  # Use MMR to ensure diversity
-                "filter": None  # No filtering by default
+                "k": 3  # Number of documents to retrieve
             }
         ),
         memory=memory,

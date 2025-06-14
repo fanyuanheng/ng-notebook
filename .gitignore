@@ -73,13 +73,8 @@ coverage.xml
 # Logs
 *.log
 
-# Chroma Database
-chroma_db/
-
-# SQLite Database
-sqlite_db/
-
 # Temporary files
+tmp/
 *.tmp
 *.bak
 *.swp

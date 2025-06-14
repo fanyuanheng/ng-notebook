@@ -2,8 +2,14 @@ import os
 from pathlib import Path
 import logging
 
+# Base paths
+BASE_DIR = Path(__file__).resolve().parent.parent.parent.parent
+TMP_DIR = BASE_DIR / "tmp"
+BASE_DIR.mkdir(exist_ok=True)
+TMP_DIR.mkdir(exist_ok=True)
+
 # Configure logging
-LOG_DIR = Path(__file__).resolve().parent.parent / "logs"
+LOG_DIR = TMP_DIR / "logs"
 LOG_DIR.mkdir(exist_ok=True)
 APP_LOG_FILE = LOG_DIR / "app.log"
 VECTOR_STORE_LOG_FILE = LOG_DIR / "chroma_db.log"
@@ -33,11 +39,10 @@ sqlite_handler = logging.FileHandler(SQLITE_LOG_FILE)
 sqlite_handler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
 sqlite_logger.addHandler(sqlite_handler)
 
-# Base paths
-BASE_DIR = Path(__file__).resolve().parent.parent
-CHROMA_DB_DIR = BASE_DIR / "chroma_db"
-SQLITE_DB_DIR = BASE_DIR / "sqlite_db"
-UPLOAD_DIR = BASE_DIR / "uploads"
+
+CHROMA_DB_DIR = TMP_DIR / "chroma_db"
+SQLITE_DB_DIR = TMP_DIR / "sqlite_db"
+UPLOAD_DIR = TMP_DIR / "uploads"
 
 # Create directories if they don't exist
 CHROMA_DB_DIR.mkdir(exist_ok=True)

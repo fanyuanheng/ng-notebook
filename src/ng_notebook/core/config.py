@@ -25,6 +25,9 @@ logging.basicConfig(
     ]
 )
 
+# Configure httpx logger to suppress HTTP request logs
+logging.getLogger("httpx").setLevel(logging.WARNING)
+
 # Configure vector store logger
 vector_store_logger = logging.getLogger('ng_notebook.services.vector_store')
 vector_store_logger.setLevel(logging.DEBUG)

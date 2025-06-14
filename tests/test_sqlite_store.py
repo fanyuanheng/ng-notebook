@@ -14,8 +14,8 @@ def test_db_dir(tmp_path):
 @pytest.fixture
 def sqlite_store(test_db_dir):
     """Create a SQLiteStore instance with test database directory."""
-    # Set environment variable for SQLite DB directory
-    os.environ["SQLITE_DB_DIR"] = str(test_db_dir)
+    # Set environment variable for SQLite DB directory to use in-memory database
+    os.environ["SQLITE_DB_DIR"] = ":memory:"
     # Create store instance
     store = SQLiteStore()
     yield store

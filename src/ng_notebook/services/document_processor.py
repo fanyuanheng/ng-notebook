@@ -93,7 +93,7 @@ class DocumentProcessor:
                 return chunks
                 
             # Handle CSV files
-            elif file_type in ["text/csv", "application/csv", "text/x-csv", "application/x-csv", "text/comma-separated-values"]:
+            elif file_type in ["text/csv", "application/csv", "text/x-csv", "application/x-csv", "text/comma-separated-values", "text/plain"]:
                 logger.info("Processing CSV file")
                 # Store in SQLite first
                 result = self.sqlite_store.add_csv_file(file_path)

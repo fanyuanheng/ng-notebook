@@ -1,162 +1,89 @@
 import streamlit as st
-import requests
-import pandas as pd
-from typing import List, Dict
-import os
-from .templates.layout import (
-    load_css,
-    init_page_config,
-    render_header,
-    render_sidebar,
-    render_chat_interface
-)
+from .state import initialize_session_state, add_message, get_chat_history, add_uploaded_file, is_file_uploaded
+from .api_client import APIClient
 from ..core.config import API_URL
 
-def init_session_state():
-    """Initialize session state variables."""
-    if "chat_history" not in st.session_state:
-        st.session_state.chat_history = []
-    if "collections" not in st.session_state:
-        st.session_state.collections = None
+# Initialize API client
+api_client = APIClient(base_url=API_URL)
 
-def display_collection_details():
-    """Display collection details including both vector store and SQLite data."""
+# Set page config
+st.set_page_config(
+    page_title="Neogenesis Notebook",
+    page_icon="📚",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
+
+# Load custom CSS
+with open("src/ng_notebook/frontend/static/styles.css") as f:
+    st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
+
+# Initialize session state
+initialize_session_state()
+
+# Title and description
+st.markdown('<h1 class="title">Neogenesis Notebook</h1>', unsafe_allow_html=True)
+st.markdown('<h2 class="subtitle">AI-Powered Document Analysis Platform</h2>', unsafe_allow_html=True)
+st.markdown("""
+Neogenesis Notebook is an advanced document analysis platform that combines cutting-edge AI technologies to help you understand and interact with your documents.
+
+Get started by uploading your documents and asking questions about their content.
+""")
+
+# File uploader
+st.markdown('<h2 class="subtitle">Upload Document</h2>', unsafe_allow_html=True)
+uploaded_file = st.file_uploader(
+    "Choose a file",
+    type=["pdf", "xlsx", "csv", "pptx", "txt"],
+    help="Supported formats: PDF, Excel, CSV, PowerPoint, and text files"
+)
+
+# Process uploaded file
+if uploaded_file is not None and not is_file_uploaded(uploaded_file.name):
     try:
-        response = requests.get(f"{API_URL}/collections")
-        data = response.json()
+        if api_client.upload_file(uploaded_file.getvalue(), uploaded_file.name):
+            st.success("Document processed successfully!")
+            add_uploaded_file(uploaded_file.name)
+        else:
+            st.error("Error processing document. Please try again.")
+    except Exception as e:
+        st.error(f"Error processing document: {str(e)}")
+
+# Chat interface
+st.markdown('<h2 class="subtitle">Chat</h2>', unsafe_allow_html=True)
+
+# Display chat messages
+for message in st.session_state.messages:
+    with st.chat_message(message["role"]):
+        st.markdown(message["content"])
+
+# Chat input
+if prompt := st.chat_input("Ask a question about your document"):
+    # Add user message to chat history
+    add_message("user", prompt)
+    
+    # Display user message
+    with st.chat_message("user"):
+        st.markdown(prompt)
+    
+    try:
+        # Get chat history and send request
+        chat_history = get_chat_history()
+        response_data = api_client.send_chat_message(prompt, chat_history)
         
-        # Display vector store statistics
-        st.markdown('<h2 class="subtitle">Vector Store Statistics</h2>', unsafe_allow_html=True)
-        col1, col2 = st.columns(2)
-        with col1:
-            st.metric("Total Documents", data["total_documents"])
-        with col2:
-            st.metric("Unique Sources", data["unique_sources"])
+        # Add assistant response to chat history
+        add_message("assistant", response_data["answer"])
         
-        # Display SQLite metadata
-        if data.get("sqlite_metadata"):
-            st.markdown('<h2 class="subtitle">SQLite Database</h2>', unsafe_allow_html=True)
-            for metadata in data["sqlite_metadata"]:
-                with st.expander(f"File: {metadata['filename']}"):
-                    st.write(f"Type: {metadata['file_type']}")
-                    st.write(f"Upload Date: {metadata['upload_date']}")
-                    
-                    # Display table information
-                    for table in metadata["tables"]:
-                        st.subheader(f"Table: {table['name']}")
-                        st.write(f"Rows: {table['row_count']}")
-                        
-                        # Display column information
-                        columns_df = pd.DataFrame(table["columns"])
-                        st.dataframe(columns_df, use_container_width=True)
-        
-        # Display sample documents
-        if data["samples"]:
-            st.markdown('<h2 class="subtitle">Sample Documents</h2>', unsafe_allow_html=True)
-            for sample in data["samples"]:
-                with st.expander(f"Document from {sample['metadata']['source']}"):
-                    st.markdown('<div class="sample-container">', unsafe_allow_html=True)
-                    st.markdown(f'<div class="sample-content">{sample["content"][:200]}...</div>', unsafe_allow_html=True)
-                    st.markdown('</div>', unsafe_allow_html=True)
-        
-        # Add a button to refresh the data
-        if st.button("Refresh Data", type="secondary"):
-            st.experimental_rerun()
+        # Display assistant response
+        with st.chat_message("assistant"):
+            st.markdown(response_data["answer"])
             
+            # Display sources if available
+            if response_data.get("source_documents"):
+                with st.expander("View Sources"):
+                    for source in response_data["source_documents"]:
+                        st.markdown(f"**Source:** {source['metadata'].get('source', 'Unknown')}")
+                        st.markdown(f"**Content:** {source['content'][:200]}...")
+                        st.markdown("---")
     except Exception as e:
-        st.error(f"Error fetching collection details: {str(e)}")
-
-def display_chat_response(response: Dict):
-    """Display chat response including both vector store and SQLite results."""
-    st.write(response["answer"])
-    
-    # Display source documents
-    if response.get("source_documents"):
-        with st.expander("Source Documents"):
-            for doc in response["source_documents"]:
-                st.markdown(f"**Source:** {doc.metadata.get('source', 'Unknown')}")
-                st.markdown(f"**Type:** {doc.metadata.get('type', 'Unknown')}")
-                st.markdown(f"**Content:** {doc.page_content[:200]}...")
-                st.markdown("---")
-    
-    # Display SQLite results
-    if response.get("sqlite_results"):
-        with st.expander("SQLite Data"):
-            for result in response["sqlite_results"]:
-                st.markdown(f"**Table:** {result['table']}")
-                st.dataframe(pd.DataFrame([result['data']]), use_container_width=True)
-                st.markdown("---")
-
-def upload_file(file):
-    """Upload a file to the API."""
-    try:
-        files = {"file": file}
-        response = requests.post(f"{API_URL}/upload", files=files)
-        response.raise_for_status()
-        return response.json()
-    except Exception as e:
-        st.error(f"Error uploading file: {str(e)}")
-        return None
-
-def query_documents(question: str, chat_history: List[Dict]):
-    """Query the documents through the API."""
-    try:
-        response = requests.post(
-            f"{API_URL}/query",
-            json={"question": question, "chat_history": chat_history}
-        )
-        response.raise_for_status()
-        return response.json()
-    except Exception as e:
-        st.error(f"Error querying documents: {str(e)}")
-        return None
-
-def get_collections():
-    """Get collections information from the API."""
-    try:
-        response = requests.get(f"{API_URL}/collections")
-        response.raise_for_status()
-        return response.json()
-    except Exception as e:
-        st.error(f"Error getting collections: {str(e)}")
-        return None
-
-def chat(message: str, chat_history: List[Dict] = None):
-    """Send a chat message to the API."""
-    try:
-        response = requests.post(
-            f"{API_URL}/chat",
-            json={"message": message, "chat_history": chat_history or []}
-        )
-        response.raise_for_status()
-        return response.json()
-    except Exception as e:
-        st.error(f"Error sending chat message: {str(e)}")
-        return None
-
-def main():
-    # Initialize page and load CSS
-    init_page_config()
-    load_css()
-    
-    # Initialize session state
-    init_session_state()
-    
-    # Render header
-    render_header()
-    
-    # Render sidebar
-    render_sidebar(
-        upload_file=upload_file,
-        on_upload=lambda file: upload_file(file),
-        collections=st.session_state.collections
-    )
-    
-    # Render chat interface
-    render_chat_interface(
-        chat_history=st.session_state.chat_history,
-        on_query=lambda question, history: query_documents(question, history)
-    )
-
-if __name__ == "__main__":
-    main() 
+        st.error(f"Error getting response: {str(e)}") 

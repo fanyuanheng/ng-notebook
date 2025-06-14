@@ -1,0 +1,80 @@
+/* Main title styling */
+.title {
+    color: #1E88E5;
+    font-size: 3rem !important;
+    font-weight: 700 !important;
+    margin-bottom: 0.5rem !important;
+}
+
+/* Subtitle styling */
+.subtitle {
+    color: #424242;
+    font-size: 1.5rem !important;
+    font-weight: 400 !important;
+    margin-bottom: 2rem !important;
+}
+
+/* Card styling */
+.stButton>button {
+    width: 100%;
+    border-radius: 10px;
+    height: 3em;
+    font-weight: 600;
+}
+
+/* Chat message styling */
+.chat-message {
+    padding: 1.5rem;
+    border-radius: 10px;
+    margin-bottom: 1rem;
+    display: flex;
+    flex-direction: row;
+    align-items: flex-start;
+    background-color: #f8f9fa;
+}
+
+/* File uploader styling */
+.stFileUploader {
+    border: 2px dashed #1E88E5;
+    border-radius: 10px;
+    padding: 1rem;
+}
+
+/* Metrics styling */
+.stMetric {
+    background-color: #f8f9fa;
+    padding: 1rem;
+    border-radius: 10px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+/* Dataframe styling */
+.stDataFrame {
+    border-radius: 10px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+/* Expander styling */
+.streamlit-expanderHeader {
+    background-color: #f8f9fa;
+    border-radius: 10px;
+    font-weight: 600;
+}
+
+/* Chat input styling */
+.stChatInput {
+    border-radius: 10px;
+    border: 2px solid #1E88E5;
+}
+
+/* Success message styling */
+.stSuccess {
+    border-radius: 10px;
+    padding: 1rem;
+}
+
+/* Error message styling */
+.stError {
+    border-radius: 10px;
+    padding: 1rem;
+} 

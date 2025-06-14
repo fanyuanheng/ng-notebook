@@ -1,140 +1,438 @@
-/* Main layout */
-.main {
-    background-color: #f5f5f5;
-}
+/* Futuristic Dark Theme CSS */
 
-.stApp {
+/* Main Layout */
+.main {
+    background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+    min-height: 100vh;
+    padding: 2rem;
     max-width: 1200px;
     margin: 0 auto;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    color: #e2e8f0;
 }
 
-/* Title styling */
+/* Typography */
 .main .title {
-    color: #1E88E5;
-    font-size: 3rem !important;
-    font-weight: 700 !important;
-    margin-bottom: 0.5rem !important;
+    font-size: 2.5rem;
+    font-weight: 800;
+    background: linear-gradient(90deg, #00f2fe 0%, #4facfe 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    margin-bottom: 0.5rem;
+    letter-spacing: -0.02em;
+    text-shadow: 0 0 20px rgba(0, 242, 254, 0.3);
 }
 
-/* Subtitle styling */
 .main .subtitle {
-    color: #424242;
-    font-size: 1.5rem !important;
-    font-weight: 400 !important;
-    margin-bottom: 2rem !important;
+    font-size: 1.2rem;
+    color: #94a3b8;
+    margin-bottom: 2rem;
+    font-weight: 500;
 }
 
-/* Button styling */
-.stButton>button {
-    width: 100%;
-    border-radius: 10px;
-    height: 3em;
+/* Buttons */
+.main .stButton > button {
+    background: linear-gradient(90deg, #00f2fe 0%, #4facfe 100%);
+    color: #0f172a;
+    border: none;
+    padding: 0.8rem 1.5rem;
+    border-radius: 12px;
     font-weight: 600;
-    margin: 0.5rem 0;
+    transition: all 0.3s ease;
+    box-shadow: 0 0 20px rgba(0, 242, 254, 0.2);
+    position: relative;
+    overflow: hidden;
 }
 
-/* Chat message styling */
-.chat-message {
+.main .stButton > button:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 0 30px rgba(0, 242, 254, 0.4);
+}
+
+.main .stButton > button::after {
+    content: '';
+    position: absolute;
+    top: -50%;
+    left: -50%;
+    width: 200%;
+    height: 200%;
+    background: linear-gradient(
+        45deg,
+        transparent,
+        rgba(255, 255, 255, 0.1),
+        transparent
+    );
+    transform: rotate(45deg);
+    transition: 0.5s;
+}
+
+.main .stButton > button:hover::after {
+    left: 100%;
+}
+
+/* Chat Messages */
+.main .chat-message {
     padding: 1.5rem;
-    border-radius: 0.5rem;
+    border-radius: 16px;
     margin-bottom: 1rem;
-    display: flex;
-    flex-direction: column;
-    background-color: #f8f9fa;
+    animation: fadeIn 0.3s ease-out;
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
-.chat-message.user {
-    background-color: #2b313e;
-    color: white;
+.main .chat-message.user {
+    background: linear-gradient(135deg, #00f2fe 0%, #4facfe 100%);
+    color: #0f172a;
+    margin-left: 2rem;
+    border-top-right-radius: 4px;
+    box-shadow: 0 0 20px rgba(0, 242, 254, 0.2);
 }
 
-.chat-message.assistant {
-    background-color: #f0f2f6;
+.main .chat-message.assistant {
+    background: rgba(30, 41, 59, 0.8);
+    color: #e2e8f0;
+    margin-right: 2rem;
+    border-top-left-radius: 4px;
+    box-shadow: 0 0 20px rgba(0, 0, 0, 0.2);
+    border: 1px solid rgba(0, 242, 254, 0.1);
 }
 
-.chat-message .content {
-    display: flex;
-    margin-top: 0.5rem;
+/* File Uploader */
+.main .stFileUploader {
+    background: rgba(30, 41, 59, 0.8);
+    padding: 2rem;
+    border-radius: 16px;
+    box-shadow: 0 0 20px rgba(0, 0, 0, 0.2);
+    border: 2px dashed rgba(0, 242, 254, 0.3);
+    transition: all 0.3s ease;
+    backdrop-filter: blur(10px);
 }
 
-/* File uploader styling */
-.stFileUploader {
-    border: 2px dashed #1E88E5;
-    border-radius: 10px;
-    padding: 1rem;
+.main .stFileUploader:hover {
+    border-color: #00f2fe;
+    box-shadow: 0 0 30px rgba(0, 242, 254, 0.2);
 }
 
-.upload-container {
-    background-color: white;
-    padding: 1rem;
-    border-radius: 0.5rem;
-    margin: 0.5rem 0;
+/* Metrics */
+.main .metric-container {
+    background: rgba(30, 41, 59, 0.8);
+    padding: 1.5rem;
+    border-radius: 16px;
+    box-shadow: 0 0 20px rgba(0, 0, 0, 0.2);
+    margin-bottom: 1rem;
+    transition: all 0.3s ease;
+    border: 1px solid rgba(0, 242, 254, 0.1);
+    backdrop-filter: blur(10px);
 }
 
-/* Metrics styling */
-.stMetric {
-    background-color: #f8f9fa;
-    padding: 1rem;
-    border-radius: 10px;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+.main .metric-container:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 0 30px rgba(0, 242, 254, 0.2);
+    border-color: #00f2fe;
 }
 
-.metric-container {
-    background-color: white;
-    padding: 1rem;
-    border-radius: 0.5rem;
-    margin: 0.5rem 0;
-}
-
-/* Dataframe styling */
-.stDataFrame {
-    border-radius: 10px;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-}
-
-/* Expander styling */
-.streamlit-expanderHeader {
-    background-color: #f8f9fa;
-    border-radius: 10px;
-    font-weight: 600;
-}
-
-/* Chat input styling */
-.stChatInput {
-    border-radius: 10px;
-    border: 2px solid #1E88E5;
-}
-
-.chat-input-container {
-    position: fixed;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    background-color: white;
-    padding: 1rem;
-    box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.1);
-}
-
-/* Message styling */
-.stSuccess {
-    border-radius: 10px;
-    padding: 1rem;
-}
-
-.stError {
-    border-radius: 10px;
-    padding: 1rem;
-}
-
-/* Document samples */
-.sample-container {
-    background-color: white;
-    padding: 1rem;
-    border-radius: 0.5rem;
-    margin: 0.5rem 0;
-}
-
-.sample-content {
+.main .metric-label {
     font-size: 0.9rem;
-    color: #666;
+    color: #94a3b8;
+    font-weight: 500;
+    margin-bottom: 0.5rem;
+}
+
+.main .metric-value {
+    font-size: 1.8rem;
+    font-weight: 700;
+    color: #00f2fe;
+    text-shadow: 0 0 10px rgba(0, 242, 254, 0.3);
+}
+
+/* DataFrames */
+.main .stDataFrame {
+    background: rgba(30, 41, 59, 0.8);
+    padding: 1.5rem;
+    border-radius: 16px;
+    box-shadow: 0 0 20px rgba(0, 0, 0, 0.2);
+    margin: 1rem 0;
+    border: 1px solid rgba(0, 242, 254, 0.1);
+    backdrop-filter: blur(10px);
+}
+
+/* Expanders */
+.main .streamlit-expanderHeader {
+    background: rgba(30, 41, 59, 0.8);
+    padding: 1rem 1.5rem;
+    border-radius: 12px;
+    font-weight: 600;
+    color: #e2e8f0;
+    box-shadow: 0 0 20px rgba(0, 0, 0, 0.2);
+    transition: all 0.3s ease;
+    border: 1px solid rgba(0, 242, 254, 0.1);
+    backdrop-filter: blur(10px);
+}
+
+.main .streamlit-expanderHeader:hover {
+    background: rgba(30, 41, 59, 0.9);
+    border-color: #00f2fe;
+    box-shadow: 0 0 30px rgba(0, 242, 254, 0.2);
+}
+
+/* Chat Input */
+.main .chat-input-container {
+    position: fixed;
+    bottom: 2rem;
+    left: 50%;
+    transform: translateX(-50%);
+    width: calc(100% - 4rem);
+    max-width: 800px;
+    background: rgba(30, 41, 59, 0.9);
+    padding: 1rem;
+    border-radius: 16px;
+    box-shadow: 0 0 30px rgba(0, 0, 0, 0.3);
+    z-index: 1000;
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(0, 242, 254, 0.2);
+}
+
+.main .chat-input {
+    width: 100%;
+    padding: 1rem;
+    border: 2px solid rgba(0, 242, 254, 0.2);
+    border-radius: 12px;
+    font-size: 1rem;
+    transition: all 0.3s ease;
+    background: rgba(15, 23, 42, 0.6);
+    color: #e2e8f0;
+}
+
+.main .chat-input:focus {
+    border-color: #00f2fe;
+    box-shadow: 0 0 20px rgba(0, 242, 254, 0.2);
+    outline: none;
+}
+
+/* Success Messages */
+.main .success {
+    background: linear-gradient(135deg, #00f2fe 0%, #4facfe 100%);
+    color: #0f172a;
+    padding: 1rem 1.5rem;
+    border-radius: 12px;
+    margin: 1rem 0;
+    animation: slideIn 0.3s ease-out;
+    box-shadow: 0 0 20px rgba(0, 242, 254, 0.2);
+}
+
+/* Error Messages */
+.main .error {
+    background: linear-gradient(135deg, #ff416c 0%, #ff4b2b 100%);
+    color: #e2e8f0;
+    padding: 1rem 1.5rem;
+    border-radius: 12px;
+    margin: 1rem 0;
+    animation: slideIn 0.3s ease-out;
+    box-shadow: 0 0 20px rgba(255, 65, 108, 0.2);
+}
+
+/* Document Samples */
+.main .document-sample {
+    background: rgba(30, 41, 59, 0.8);
+    padding: 1.5rem;
+    border-radius: 16px;
+    margin: 1rem 0;
+    box-shadow: 0 0 20px rgba(0, 0, 0, 0.2);
+    border: 1px solid rgba(0, 242, 254, 0.1);
+    transition: all 0.3s ease;
+    backdrop-filter: blur(10px);
+}
+
+.main .document-sample:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 0 30px rgba(0, 242, 254, 0.2);
+    border-color: #00f2fe;
+}
+
+/* Animations */
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes slideIn {
+    from {
+        opacity: 0;
+        transform: translateX(-20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+/* Glow Effects */
+@keyframes glow {
+    0% {
+        box-shadow: 0 0 5px rgba(0, 242, 254, 0.2);
+    }
+    50% {
+        box-shadow: 0 0 20px rgba(0, 242, 254, 0.4);
+    }
+    100% {
+        box-shadow: 0 0 5px rgba(0, 242, 254, 0.2);
+    }
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .main {
+        padding: 1rem;
+    }
+    
+    .main .title {
+        font-size: 2rem;
+    }
+    
+    .main .chat-input-container {
+        width: calc(100% - 2rem);
+        bottom: 1rem;
+    }
+    
+    .main .chat-message {
+        margin-left: 0;
+        margin-right: 0;
+    }
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+    width: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: rgba(30, 41, 59, 0.8);
+}
+
+::-webkit-scrollbar-thumb {
+    background: linear-gradient(90deg, #00f2fe 0%, #4facfe 100%);
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: linear-gradient(90deg, #4facfe 0%, #00f2fe 100%);
+}
+
+/* Streamlit Theme Overrides */
+.stApp {
+    background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+    color: #e2e8f0;
+}
+
+/* Override Streamlit's default light theme */
+.stApp header {
+    background-color: rgba(15, 23, 42, 0.8) !important;
+    backdrop-filter: blur(10px);
+    border-bottom: 1px solid rgba(0, 242, 254, 0.1);
+}
+
+.stApp .main .block-container {
+    background: transparent;
+    padding-top: 2rem;
+}
+
+/* Override Streamlit's default text colors */
+.stApp p, .stApp h1, .stApp h2, .stApp h3, .stApp h4, .stApp h5, .stApp h6 {
+    color: #e2e8f0;
+}
+
+/* Override Streamlit's default sidebar */
+.stApp .sidebar .sidebar-content {
+    background: rgba(15, 23, 42, 0.8);
+    backdrop-filter: blur(10px);
+    border-right: 1px solid rgba(0, 242, 254, 0.1);
+}
+
+/* Override Streamlit's default elements */
+.stApp .stButton button {
+    background: linear-gradient(90deg, #00f2fe 0%, #4facfe 100%);
+    color: #0f172a;
+    border: none;
+    padding: 0.8rem 1.5rem;
+    border-radius: 12px;
+    font-weight: 600;
+    transition: all 0.3s ease;
+    box-shadow: 0 0 20px rgba(0, 242, 254, 0.2);
+}
+
+.stApp .stButton button:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 0 30px rgba(0, 242, 254, 0.4);
+}
+
+/* Override Streamlit's file uploader */
+.stApp .stFileUploader {
+    background: rgba(30, 41, 59, 0.8);
+    padding: 2rem;
+    border-radius: 16px;
+    box-shadow: 0 0 20px rgba(0, 0, 0, 0.2);
+    border: 2px dashed rgba(0, 242, 254, 0.3);
+    transition: all 0.3s ease;
+    backdrop-filter: blur(10px);
+}
+
+.stApp .stFileUploader:hover {
+    border-color: #00f2fe;
+    box-shadow: 0 0 30px rgba(0, 242, 254, 0.2);
+}
+
+/* Override Streamlit's chat elements */
+.stApp .stChatMessage {
+    background: rgba(30, 41, 59, 0.8);
+    padding: 1.5rem;
+    border-radius: 16px;
+    margin-bottom: 1rem;
+    animation: fadeIn 0.3s ease-out;
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(0, 242, 254, 0.1);
+}
+
+.stApp .stChatMessage[data-testid="stChatMessageContent"] {
+    color: #e2e8f0;
+}
+
+/* Override Streamlit's input elements */
+.stApp .stTextInput input {
+    background: rgba(15, 23, 42, 0.6);
+    color: #e2e8f0;
+    border: 2px solid rgba(0, 242, 254, 0.2);
+    border-radius: 12px;
+    padding: 0.8rem 1rem;
+}
+
+.stApp .stTextInput input:focus {
+    border-color: #00f2fe;
+    box-shadow: 0 0 20px rgba(0, 242, 254, 0.2);
+}
+
+/* Override Streamlit's success/error messages */
+.stApp .stSuccess {
+    background: linear-gradient(135deg, #00f2fe 0%, #4facfe 100%);
+    color: #0f172a;
+    padding: 1rem 1.5rem;
+    border-radius: 12px;
+    margin: 1rem 0;
+    animation: slideIn 0.3s ease-out;
+    box-shadow: 0 0 20px rgba(0, 242, 254, 0.2);
+}
+
+.stApp .stError {
+    background: linear-gradient(135deg, #ff416c 0%, #ff4b2b 100%);
+    color: #e2e8f0;
+    padding: 1rem 1.5rem;
+    border-radius: 12px;
+    margin: 1rem 0;
+    animation: slideIn 0.3s ease-out;
+    box-shadow: 0 0 20px rgba(255, 65, 108, 0.2);
 } 

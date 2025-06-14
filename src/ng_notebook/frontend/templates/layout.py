@@ -20,8 +20,8 @@ def render_header():
     st.title("Neogenesis Notebook")
     st.markdown("Your AI-powered document analysis assistant")
 
-def render_sidebar(upload_file, on_upload, collections):
-    """Render the sidebar with upload and collections sections."""
+def render_sidebar(upload_file, on_upload):
+    """Render the sidebar with upload section."""
     with st.sidebar:
         st.header("Upload Documents")
         with st.container():
@@ -38,28 +38,6 @@ def render_sidebar(upload_file, on_upload, collections):
                     result = on_upload(uploaded_file)
                     if result:
                         st.success(f"Processed {result['chunks']} chunks")
-                        collections = get_collections()
-        
-        st.header("Collections")
-        if collections:
-            st.markdown('<div class="metric-container">', unsafe_allow_html=True)
-            st.metric(
-                "Total Documents",
-                collections["total_documents"]
-            )
-            st.metric(
-                "Unique Sources",
-                collections["unique_sources"]
-            )
-            st.markdown('</div>', unsafe_allow_html=True)
-            
-            if collections["samples"]:
-                st.subheader("Sample Documents")
-                for sample in collections["samples"]:
-                    with st.expander(f"Document from {sample['metadata']['source']}"):
-                        st.markdown('<div class="sample-container">', unsafe_allow_html=True)
-                        st.markdown(f'<div class="sample-content">{sample["content"][:200]}...</div>', unsafe_allow_html=True)
-                        st.markdown('</div>', unsafe_allow_html=True)
 
 def render_chat_interface(chat_history, on_query):
     """Render the chat interface."""

@@ -2,21 +2,15 @@ import os
 from typing import List
 from fastapi import FastAPI, UploadFile, File, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
 import uvicorn
 from langchain_community.llms import Ollama
 from langchain_community.embeddings import OllamaEmbeddings
-from langchain_community.vectorstores import Chroma
-from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain.chains import ConversationalRetrievalChain
-from langchain.memory import ConversationBufferMemory
 import streamlit as st
 import tempfile
 import pandas as pd
 from pptx import Presentation
 import PyPDF2
 import magic
-from langchain.prompts import PromptTemplate
 import shutil
 import chromadb
 from chromadb.config import Settings
@@ -31,6 +25,7 @@ from langchain_core.documents import Document
 from .services.vector_store import VectorStore
 from .services.sqlite_store import SQLiteStore
 from .services.vector_store import get_vector_store, get_sqlite_store, get_document_processor, get_llm
+from .services.chat_service import ChatService, ChatRequest
 
 # Get logger
 logger = logging.getLogger(__name__)
@@ -60,112 +55,8 @@ embeddings = OllamaEmbeddings(model="all-minilm")
 # Get vector store instance using singleton pattern
 vector_store = VectorStore()
 
-# Initialize conversation memory
-memory = ConversationBufferMemory(
-    memory_key="chat_history",
-    return_messages=True,
-    output_key="answer"
-)
-
-# Create a more detailed prompt template for better document handling
-template = """You are an AI assistant specialized in analyzing and explaining data from various document types. 
-When dealing with different document types, pay special attention to:
-
-For Excel/CSV files:
-1. Numerical data and calculations
-2. Column names and their relationships
-3. Row indices and their context
-4. Data types and formats
-5. Sheet names and their relationships (for Excel)
-6. Statistical information (mean, median, correlations)
-7. Sample values and unique counts
-
-For PDF documents:
-1. Page numbers and their context
-2. Document structure and sections
-3. Headers and subheaders
-4. Lists and bullet points
-5. Tables and their content
-6. Important figures and statistics
-7. Key concepts and their relationships
-
-For PowerPoint presentations:
-1. Slide numbers and their sequence
-2. Slide titles and subtitles
-3. Bullet points and their hierarchy
-4. Images and their captions
-5. Speaker notes if available
-6. Presentation flow and structure
-7. Key messages and takeaways
-
-Use the following pieces of context to answer the question at the end.
-If you don't know the answer, just say that you don't know, don't try to make up an answer.
-
-Context: {context}
-
-Chat History: {chat_history}
-
-Question: {question}
-
-When answering:
-1. For Excel/CSV data:
-   - Reference specific columns, rows, or cells when relevant
-   - Include numerical values in your response
-   - Explain patterns or relationships in the data
-   - Show calculations when asked
-   - Mention sheet names for Excel files
-
-2. For PDF documents:
-   - Reference specific pages or sections
-   - Maintain document structure in your response
-   - Include relevant quotes or statistics
-   - Explain relationships between concepts
-   - Reference tables or figures when relevant
-
-3. For PowerPoint presentations:
-   - Reference specific slides
-   - Maintain presentation flow
-   - Include key points and their context
-   - Explain relationships between slides
-   - Reference visual elements when relevant
-
-4. General guidelines:
-   - Be specific and precise in your references
-   - Provide context for your answers
-   - Explain relationships and patterns
-   - Include relevant statistics or numbers
-   - Maintain document structure in your response
-
-Answer:
-"""
-
-# Create the prompt
-prompt = PromptTemplate(
-    input_variables=["context", "chat_history", "question"],
-    template=template
-)
-
-# Initialize the chain with the custom prompt
-chain = ConversationalRetrievalChain.from_llm(
-    llm=llm,
-    retriever=vector_store.as_retriever(
-        search_type="similarity"
-    ),
-    memory=memory,
-    return_source_documents=True,
-    combine_docs_chain_kwargs={"prompt": prompt}
-)
-
-class ChatMessage(BaseModel):
-    role: str
-    content: str
-
-class ChatRequest(BaseModel):
-    message: str
-    chat_history: List[ChatMessage]
-
-class ChatResponse(BaseModel):
-    response: str
+# Initialize chat service
+chat_service = ChatService(vector_store, llm)
 
 def clean_metadata(metadata: dict) -> dict:
     """Clean metadata to ensure all values are simple types."""
@@ -258,19 +149,7 @@ async def upload_file(
 async def chat(request: ChatRequest):
     """Chat with the AI about the documents."""
     try:
-        # Get response from vector store
-        vector_result = vector_store.query(request.message)
-        
-        return {
-            "answer": vector_result["answer"],
-            "source_documents": [
-                {
-                    "content": doc.page_content,
-                    "metadata": doc.metadata
-                }
-                for doc in vector_result["source_documents"]
-            ]
-        }
+        return await chat_service.process_chat(request)
     except Exception as e:
         logger.error(f"Error in chat: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))

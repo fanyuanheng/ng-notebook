@@ -1,6 +1,14 @@
+# Product Screenshot
+
+![Neogenesis Notebook Screenshot](./sample.png)
+
 # Neogenesis Notebook
 
-An AI-powered document analysis assistant that can process and analyze PDF, Excel, and PowerPoint files.
+AI-Powered Document Analysis Platform
+
+Neogenesis Notebook is an advanced document analysis platform that combines cutting-edge AI technologies to help you understand and interact with your documents.
+
+Get started by uploading your documents and asking questions about their content.
 
 ## Project Structure
 

@@ -100,6 +100,8 @@ st.markdown("""
 # Initialize session state
 if "messages" not in st.session_state:
     st.session_state.messages = []
+if "uploaded_files" not in st.session_state:
+    st.session_state.uploaded_files = set()
 
 # Title and description
 st.markdown('<h1 class="title">Neogenesis Notebook</h1>', unsafe_allow_html=True)
@@ -119,12 +121,13 @@ uploaded_file = st.file_uploader(
 )
 
 # Process uploaded file
-if uploaded_file is not None:
+if uploaded_file is not None and uploaded_file.name not in st.session_state.uploaded_files:
     files = {"file": (uploaded_file.name, uploaded_file.getvalue())}
     response = requests.post("http://localhost:8000/upload", files=files)
     
     if response.status_code == 200:
         st.success("Document processed successfully!")
+        st.session_state.uploaded_files.add(uploaded_file.name)
     else:
         st.error("Error processing document. Please try again.")
 

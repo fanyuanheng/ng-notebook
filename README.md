@@ -87,12 +87,12 @@ pip install -e .
 
 2. Start the backend server:
 ```bash
-uvicorn ng-notebook.main:app --reload
+uvicorn ng_notebook.main:app --reload
 ```
 
 3. Start the frontend:
 ```bash
-streamlit run src/ng-notebook/app.py
+streamlit run src/ng_notebook/app.py
 ```
 
 ## Usage

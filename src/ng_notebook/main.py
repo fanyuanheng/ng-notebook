@@ -261,30 +261,38 @@ async def upload_file(
 async def chat(
     request: ChatRequest,
     vector_store: VectorStore = Depends(get_vector_store),
+    sqlite_store: SQLiteStore = Depends(get_sqlite_store),
     llm: Ollama = Depends(get_llm)
 ) -> ChatResponse:
     """Handle chat requests."""
     try:
         # Get relevant documents from vector store
-        docs = vector_store.similarity_search(request.message)
+        vector_result = vector_store.query(request.message)
         
-        # Create context from documents
-        context = "\n\n".join([doc.page_content for doc in docs])
+        # Get results from SQLite store
+        sqlite_results = sqlite_store.query_data(request.message)
         
-        # Create prompt
-        prompt = f"""Based on the following context, answer the question. If you don't know the answer, just say that you don't know.
+        # Combine results
+        combined_context = vector_result["answer"]
+        if sqlite_results:
+            combined_context += "\n\nSQLite Data:\n"
+            for result in sqlite_results:
+                combined_context += f"\nTable: {result['table']}\n"
+                combined_context += f"Data: {result['data']}\n"
+        
+        # Generate final response using combined context
+        final_response = llm.invoke(
+            f"""Based on the following context, answer the question. If you don't know the answer, just say that you don't know.
 
 Context:
-{context}
+{combined_context}
 
 Question: {request.message}
 
 Answer:"""
+        )
         
-        # Get response from LLM
-        response = llm.invoke(prompt)
-        
-        return ChatResponse(response=response)
+        return ChatResponse(response=final_response)
     except Exception as e:
         logger.error(f"Error in chat: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))

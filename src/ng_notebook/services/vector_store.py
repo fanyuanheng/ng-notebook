@@ -92,7 +92,6 @@ class VectorStore:
             persist_directory=str(CHROMA_DB_DIR),
             embedding_function=self.embeddings
         )
-        self.sqlite_store = SQLiteStore()
         self._setup_chain()
 
     def _setup_chain(self):
@@ -133,44 +132,20 @@ class VectorStore:
         self.vector_store.persist()
 
     def query(self, question: str, chat_history: List[Dict] = None) -> Dict:
-        """Query both vector store and SQLite database with a question."""
+        """Query vector store with a question."""
         if chat_history is None:
             chat_history = []
         
         # Get results from vector store
         vector_result = self.chain({"question": question, "chat_history": chat_history})
         
-        # Get results from SQLite store
-        sqlite_results = self.sqlite_store.query_data(question)
-        
-        # Combine results
-        combined_context = vector_result["answer"]
-        if sqlite_results:
-            combined_context += "\n\nSQLite Data:\n"
-            for result in sqlite_results:
-                combined_context += f"\nTable: {result['table']}\n"
-                combined_context += f"Data: {result['data']}\n"
-        
-        # Generate final response using combined context
-        final_response = self.llm.predict(
-            f"""Based on the following context, answer the question:
-            
-            Context:
-            {combined_context}
-            
-            Question: {question}
-            
-            Answer:"""
-        )
-        
         return {
-            "answer": final_response,
-            "source_documents": vector_result.get("source_documents", []),
-            "sqlite_results": sqlite_results
+            "answer": vector_result["answer"],
+            "source_documents": vector_result.get("source_documents", [])
         }
 
     def get_collections(self) -> Dict:
-        """Get information about both vector store and SQLite collections."""
+        """Get information about vector store collections."""
         # Get vector store collections
         collections = self.vector_store._collection.get()
         
@@ -187,18 +162,10 @@ class VectorStore:
                 "metadata": collections["metadatas"][i]
             })
         
-        # Get SQLite metadata
-        sqlite_metadata = []
-        for source in unique_sources:
-            metadata = self.sqlite_store.get_file_metadata(source)
-            if metadata:
-                sqlite_metadata.append(metadata)
-        
         return {
             "total_documents": total_documents,
             "unique_sources": len(unique_sources),
-            "samples": samples,
-            "sqlite_metadata": sqlite_metadata
+            "samples": samples
         }
 
 def add_documents(documents: List[str], metadatas: Optional[List[dict]] = None) -> None:

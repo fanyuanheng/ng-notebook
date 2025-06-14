@@ -483,4 +483,45 @@ class SQLiteStore:
                 
         except Exception as e:
             logger.error("Failed to retrieve table data: %s", str(e), exc_info=True)
+            raise
+
+    def query_data(self, question: str) -> List[Dict[str, Any]]:
+        """Query SQLite database with a natural language question."""
+        try:
+            logger.debug("Querying SQLite database with question: %s", question)
+            
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                
+                # Get all tables
+                cursor.execute("""
+                    SELECT name FROM sqlite_master 
+                    WHERE type='table' 
+                    AND name NOT LIKE 'sqlite_%'
+                """)
+                
+                tables = cursor.fetchall()
+                results = []
+                
+                for table in tables:
+                    table_name = table[0]
+                    
+                    # Get table schema
+                    cursor.execute(f"PRAGMA table_info({table_name})")
+                    columns = cursor.fetchall()
+                    
+                    # Get sample data
+                    cursor.execute(f"SELECT * FROM {table_name} LIMIT 5")
+                    sample_data = cursor.fetchall()
+                    
+                    if sample_data:
+                        results.append({
+                            "table": table_name,
+                            "data": sample_data
+                        })
+                
+                return results
+                
+        except Exception as e:
+            logger.error("Failed to query SQLite database: %s", str(e), exc_info=True)
             raise 

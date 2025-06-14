@@ -3,8 +3,14 @@ from langchain_community.llms import Ollama
 from langchain.memory import ConversationBufferMemory
 from langchain.prompts import PromptTemplate
 from langchain.chains import ConversationalRetrievalChain
+from langchain.chains.question_answering import load_qa_chain
+from langchain.chains import LLMChain
 from .vector_store import VectorStore
+from .sqlite_store import SQLiteStore
 from pydantic import BaseModel
+import logging
+
+logger = logging.getLogger(__name__)
 
 class ChatMessage(BaseModel):
     role: str
@@ -18,8 +24,9 @@ class ChatResponse(BaseModel):
     response: str
 
 class ChatService:
-    def __init__(self, vector_store: VectorStore, llm: Ollama):
+    def __init__(self, vector_store: VectorStore, llm: Ollama, sqlite_store: SQLiteStore = None):
         self.vector_store = vector_store
+        self.sqlite_store = sqlite_store or SQLiteStore()
         self.llm = llm
         self.memory = ConversationBufferMemory(
             memory_key="chat_history",
@@ -108,31 +115,138 @@ Answer:
             template=self._get_prompt_template()
         )
 
-        return ConversationalRetrievalChain.from_llm(
+        qa_chain = load_qa_chain(
             llm=self.llm,
+            chain_type="stuff",
+            prompt=prompt
+        )
+
+        # Create a question generator chain
+        question_generator = LLMChain(
+            llm=self.llm,
+            prompt=PromptTemplate(
+                input_variables=["chat_history", "question"],
+                template="""Given the following conversation and a follow up question, rephrase the follow up question to be a standalone question.
+
+Chat History:
+{chat_history}
+Follow Up Input: {question}
+Standalone question:"""
+            )
+        )
+
+        return ConversationalRetrievalChain(
             retriever=self.vector_store.as_retriever(
                 search_type="similarity"
             ),
+            combine_docs_chain=qa_chain,
+            question_generator=question_generator,
             memory=self.memory,
             return_source_documents=True,
-            combine_docs_chain_kwargs={"prompt": prompt}
+            verbose=True
         )
 
     async def process_chat(self, request: ChatRequest) -> Dict[str, Any]:
         """Process a chat request and return the response."""
         try:
-            # Get response from vector store
-            vector_result = self.vector_store.query(request.message)
+            # Get relevant data from SQLite store
+            sqlite_context = self._get_sqlite_context(request.message)
+            
+            # Get response from chain
+            response = self.chain.invoke({
+                "question": request.message,
+                "chat_history": request.chat_history
+            })
+            
+            # Add SQLite context to the answer
+            final_answer = f"{response['answer']}\n\nAdditional Context from Database:\n{sqlite_context}"
             
             return {
-                "answer": vector_result["answer"],
+                "answer": final_answer,
                 "source_documents": [
                     {
                         "content": doc.page_content,
                         "metadata": doc.metadata
                     }
-                    for doc in vector_result["source_documents"]
+                    for doc in response["source_documents"]
                 ]
             }
         except Exception as e:
-            raise Exception(f"Error in chat: {str(e)}") 
+            raise Exception(f"Error in chat: {str(e)}")
+
+    def _get_sqlite_context(self, query: str) -> str:
+        """Get relevant data from SQLite store based on the query."""
+        try:
+            if not self.sqlite_store:
+                return "No SQLite store available."
+
+            # Get all uploaded files
+            with self.sqlite_store.get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute("""
+                    SELECT id, filename, file_type
+                    FROM uploaded_files
+                    ORDER BY upload_date DESC
+                """)
+                files = cursor.fetchall()
+                
+                context_parts = []
+                
+                for file_id, filename, file_type in files:
+                    if file_type == "excel":
+                        # Get sheet information
+                        cursor.execute("""
+                            SELECT sheet_name, row_count, column_count
+                            FROM excel_sheets
+                            WHERE file_id = ?
+                        """, (file_id,))
+                        sheets = cursor.fetchall()
+                        
+                        for sheet_name, row_count, column_count in sheets:
+                            # Get sample data from the sheet
+                            safe_sheet_name = sheet_name.lower().replace(' ', '_').replace('&', 'and')
+                            table_name = f"excel_{file_id}_{safe_sheet_name}"
+                            try:
+                                # Verify table exists
+                                cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name=?", (table_name,))
+                                if cursor.fetchone():
+                                    cursor.execute(f"SELECT * FROM [{table_name}] LIMIT 5")
+                                    sample_data = cursor.fetchall()
+                                    
+                                    if sample_data:
+                                        context_parts.append(f"""
+Excel File: {filename}
+Sheet: {sheet_name}
+Dimensions: {row_count} rows x {column_count} columns
+Sample Data:
+{chr(10).join(str(row) for row in sample_data)}
+""")
+                            except Exception as e:
+                                logger.warning(f"Could not fetch data from table {table_name}: {str(e)}")
+                                continue
+                    elif file_type == "csv":
+                        # Get sample data from CSV
+                        safe_filename = filename.lower().replace('.', '_').replace('&', 'and')
+                        table_name = f"csv_{file_id}_{safe_filename}"
+                        try:
+                            # Verify table exists
+                            cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name=?", (table_name,))
+                            if cursor.fetchone():
+                                cursor.execute(f"SELECT * FROM [{table_name}] LIMIT 5")
+                                sample_data = cursor.fetchall()
+                                
+                                if sample_data:
+                                    context_parts.append(f"""
+CSV File: {filename}
+Sample Data:
+{chr(10).join(str(row) for row in sample_data)}
+""")
+                        except Exception as e:
+                            logger.warning(f"Could not fetch data from table {table_name}: {str(e)}")
+                            continue
+                
+                return "\n".join(context_parts) if context_parts else "No relevant data found in database."
+                
+        except Exception as e:
+            logger.error(f"Error retrieving SQLite context: {str(e)}")
+            return f"Error retrieving database context: {str(e)}" 

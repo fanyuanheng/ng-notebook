@@ -61,10 +61,10 @@ CHUNK_SIZE = 1000
 CHUNK_OVERLAP = 200
 
 # API Configuration
-API_HOST = "0.0.0.0"
+API_HOST = "localhost"
 API_PORT = 8000
 API_URL = f"http://{API_HOST}:{API_PORT}"
-CHAT_TIMEOUT = 30  # seconds
+CHAT_TIMEOUT = 120  # seconds
 
 # Frontend Configuration
 FRONTEND_HOST = "localhost"

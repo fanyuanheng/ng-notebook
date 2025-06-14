@@ -435,4 +435,99 @@
     margin: 1rem 0;
     animation: slideIn 0.3s ease-out;
     box-shadow: 0 0 20px rgba(255, 65, 108, 0.2);
+}
+
+/* Running indicator styles */
+.st-emotion-cache-1mw7iut.emoooxk3 {
+    background: linear-gradient(45deg, #00ff87, #00b8ff);
+    color: #000;
+    padding: 8px 16px;
+    border-radius: 20px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    box-shadow: 0 0 20px rgba(0, 255, 135, 0.3);
+    animation: pulse 2s infinite;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.st-emotion-cache-1mw7iut.emoooxk3::before {
+    content: '';
+    width: 8px;
+    height: 8px;
+    background: #000;
+    border-radius: 50%;
+    animation: blink 1s infinite;
+}
+
+/* Disable textarea when running */
+div[data-testid="stTextInput"] textarea:disabled,
+div[data-testid="stTextInput"] textarea[disabled] {
+    opacity: 0.6;
+    cursor: not-allowed;
+    pointer-events: none;
+    background-color: rgba(0, 0, 0, 0.1);
+    border-color: rgba(0, 0, 0, 0.2);
+}
+
+/* Add a tooltip to explain why it's disabled */
+div[data-testid="stTextInput"]:has(textarea:disabled)::after {
+    content: 'Please wait for the current response to complete';
+    position: absolute;
+    bottom: -25px;
+    left: 0;
+    font-size: 0.8em;
+    color: #666;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+div[data-testid="stTextInput"]:has(textarea:disabled):hover::after {
+    opacity: 1;
+}
+
+@keyframes pulse {
+    0% {
+        box-shadow: 0 0 20px rgba(0, 255, 135, 0.3);
+    }
+    50% {
+        box-shadow: 0 0 30px rgba(0, 255, 135, 0.5);
+    }
+    100% {
+        box-shadow: 0 0 20px rgba(0, 255, 135, 0.3);
+    }
+}
+
+@keyframes blink {
+    0%, 100% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.3;
+    }
+}
+
+/* Dark mode support */
+@media (prefers-color-scheme: dark) {
+    .st-emotion-cache-1mw7iut.emoooxk3 {
+        background: linear-gradient(45deg, #00ff87, #00b8ff);
+        color: #000;
+        box-shadow: 0 0 20px rgba(0, 255, 135, 0.4);
+    }
+    
+    .st-emotion-cache-1mw7iut.emoooxk3::before {
+        background: #000;
+    }
+
+    div[data-testid="stTextInput"] textarea:disabled,
+    div[data-testid="stTextInput"] textarea[disabled] {
+        background-color: rgba(255, 255, 255, 0.1);
+        border-color: rgba(255, 255, 255, 0.2);
+    }
+
+    div[data-testid="stTextInput"]:has(textarea:disabled)::after {
+        color: #999;
+    }
 } 

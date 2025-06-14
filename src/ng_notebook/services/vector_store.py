@@ -1,7 +1,6 @@
 from typing import List, Dict, Optional
-from langchain_community.embeddings import OllamaEmbeddings
-from langchain_community.vectorstores import Chroma
-from langchain_community.llms import Ollama
+from langchain_ollama import OllamaEmbeddings, OllamaLLM
+from langchain_chroma import Chroma
 from langchain.chains import ConversationalRetrievalChain
 from langchain.memory import ConversationBufferMemory
 from langchain.prompts import PromptTemplate
@@ -19,15 +18,15 @@ logger = logging.getLogger('ng_notebook.services.vector_store')
 _vector_store: Optional[Chroma] = None
 _sqlite_store: Optional[SQLiteStore] = None
 _document_processor: Optional[DocumentProcessor] = None
-_llm: Optional[Ollama] = None
+_llm: Optional[OllamaLLM] = None
 
-def get_llm() -> Ollama:
+def get_llm() -> OllamaLLM:
     """Get or create the LLM instance."""
     global _llm
     if _llm is None:
         logger.info(f"Initializing LLM with model: {LLM_MODEL}")
         try:
-            _llm = Ollama(model=LLM_MODEL)
+            _llm = OllamaLLM(model=LLM_MODEL)
             logger.info("LLM initialized successfully")
         except Exception as e:
             logger.error(f"Error initializing LLM: {str(e)}", exc_info=True)
@@ -88,7 +87,7 @@ def get_document_processor() -> DocumentProcessor:
 class VectorStore:
     def __init__(self):
         self.embeddings = OllamaEmbeddings(model=EMBEDDING_MODEL)
-        self.llm = Ollama(model=LLM_MODEL)
+        self.llm = OllamaLLM(model=LLM_MODEL)
         self.vector_store = Chroma(
             persist_directory=str(CHROMA_DB_DIR),
             embedding_function=self.embeddings
@@ -177,7 +176,7 @@ class VectorStore:
         
         # Calculate statistics
         total_documents = len(collections["ids"])
-        unique_sources = len(set(doc["source"] for doc in collections["metadatas"]))
+        unique_sources = set(doc["source"] for doc in collections["metadatas"])
         
         # Get document samples
         sample_size = min(5, total_documents)
@@ -190,14 +189,14 @@ class VectorStore:
         
         # Get SQLite metadata
         sqlite_metadata = []
-        for filename in unique_sources:
-            metadata = self.sqlite_store.get_file_metadata(filename)
+        for source in unique_sources:
+            metadata = self.sqlite_store.get_file_metadata(source)
             if metadata:
                 sqlite_metadata.append(metadata)
         
         return {
             "total_documents": total_documents,
-            "unique_sources": unique_sources,
+            "unique_sources": len(unique_sources),
             "samples": samples,
             "sqlite_metadata": sqlite_metadata
         }

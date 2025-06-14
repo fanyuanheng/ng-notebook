@@ -40,11 +40,8 @@ def mock_chroma(mock_retriever):
     return mock
 
 @pytest.fixture
-def vector_store(test_chroma_dir, mock_chroma):
-    """Create a VectorStore instance with test database directories and mocked Chroma."""
-    # Set environment variables for test databases
-    os.environ["CHROMA_DB_DIR"] = str(test_chroma_dir)
-    
+def vector_store(mock_chroma):
+    """Create a VectorStore instance with in-memory Chroma database and mocked Chroma."""
     # Create store instance with mocked Chroma
     with patch('ng_notebook.services.vector_store.Chroma', return_value=mock_chroma), \
          patch('ng_notebook.services.vector_store.ConversationalRetrievalChain.from_llm') as mock_chain, \
@@ -68,12 +65,6 @@ def vector_store(test_chroma_dir, mock_chroma):
         store.chain = mock_chain_instance
         store.llm = mock_llm_instance
         yield store
-    
-    # Cleanup
-    if os.path.exists(test_chroma_dir):
-        for file in test_chroma_dir.glob("*"):
-            file.unlink()
-        test_chroma_dir.rmdir()
 
 def test_add_documents(vector_store, mock_chroma):
     """Test adding documents to the vector store."""

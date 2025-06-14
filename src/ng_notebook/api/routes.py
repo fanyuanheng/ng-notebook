@@ -6,7 +6,7 @@ import logging
 from ..services.document_processor import DocumentProcessor
 from ..services.vector_store import VectorStore
 from ..models.document import Query, QueryResponse
-from ..core.config import UPLOAD_DIR
+from ..core.config import UPLOAD_DIR, SQLITE_DB_DIR
 
 # Configure logging
 logging.basicConfig(level=logging.DEBUG)
@@ -81,4 +81,28 @@ async def query_documents(query: Query):
 @router.get("/collections")
 async def get_collections():
     """Get information about the vector store collections."""
-    return vector_store.get_collections() 
+    return vector_store.get_collections()
+
+@router.get("/sqlite/data")
+async def get_sqlite_data():
+    """Get all data from the SQLite store."""
+    try:
+        import sqlite3
+        db_path = SQLITE_DB_DIR / "documents.db"
+        if not os.path.exists(db_path):
+            return {"error": "SQLite database not found."}
+        conn = sqlite3.connect(str(db_path))
+        cursor = conn.cursor()
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")
+        tables = cursor.fetchall()
+        data = {}
+        for table in tables:
+            table_name = table[0]
+            cursor.execute(f"SELECT * FROM {table_name}")
+            rows = cursor.fetchall()
+            data[table_name] = rows
+        conn.close()
+        return data
+    except Exception as e:
+        logger.error(f"Error fetching SQLite data: {str(e)}", exc_info=True)
+        return {"error": f"Error fetching SQLite data: {str(e)}"} 

@@ -163,6 +163,25 @@ def display_collection_details():
     if st.button("Refresh Data", type="secondary"):
         st.experimental_rerun()
 
+def display_sql_data():
+    """Display detailed information about the SQLite database."""
+    st.markdown('<h1 class="title">SQLite Database Details</h1>', unsafe_allow_html=True)
+    
+    # Fetch SQLite data
+    response = requests.get("http://localhost:8000/api/sqlite/data")
+    if response.status_code != 200:
+        st.error("Error fetching SQLite data. Please try again.")
+        return
+    
+    data = response.json()
+    if "error" in data:
+        st.error(data["error"])
+        return
+    
+    # Display SQLite data
+    st.markdown('<h2 class="subtitle">SQLite Data</h2>', unsafe_allow_html=True)
+    st.json(data)
+
 # Title and description
 st.markdown('<h1 class="title">Neogenesis Notebook</h1>', unsafe_allow_html=True)
 st.markdown('<h2 class="subtitle">AI-Powered Document Analysis Platform</h2>', unsafe_allow_html=True)
@@ -173,7 +192,7 @@ Get started by uploading your documents and asking questions about their content
 """)
 
 # Add database management buttons
-col1, col2 = st.columns(2)
+col1, col2, col3 = st.columns(3)
 with col1:
     if st.button("Clear Database", type="secondary"):
         response = requests.post("http://localhost:8000/clear-db")
@@ -185,8 +204,12 @@ with col1:
             st.error("Error clearing database. Please try again.")
 
 with col2:
-    if st.button("View Collections", type="secondary"):
+    if st.button("View Vector Data", type="secondary"):
         display_collection_details()
+
+with col3:
+    if st.button("View SQL Data", type="secondary"):
+        display_sql_data()
 
 # File uploader
 st.markdown('<h2 class="subtitle">Upload Document</h2>', unsafe_allow_html=True)

@@ -101,87 +101,6 @@ st.markdown("""
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-def display_collection_details():
-    """Display detailed information about the Chroma DB collection."""
-    st.markdown('<h1 class="title">Chroma DB Collection Details</h1>', unsafe_allow_html=True)
-    
-    # Fetch collection information
-    response = requests.get("http://localhost:8000/collections")
-    if response.status_code != 200:
-        st.error("Error fetching collection information. Please try again.")
-        return
-    
-    data = response.json()
-    if "error" in data:
-        st.error(data["error"])
-        return
-    
-    # Display basic collection information
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        st.metric("Total Documents", data["total_documents"])
-    with col2:
-        st.metric("Document Types", len(data["document_types"]))
-    with col3:
-        st.metric("Unique Sources", len(data["unique_sources"]))
-    
-    # Display document types with counts
-    st.markdown('<h2 class="subtitle">Document Types</h2>', unsafe_allow_html=True)
-    type_data = []
-    for doc_type, count in data["type_statistics"]["counts"].items():
-        type_data.append({
-            "Type": doc_type,
-            "Count": count
-        })
-    doc_types_df = pd.DataFrame(type_data)
-    st.dataframe(doc_types_df, use_container_width=True)
-    
-    # Display document type samples
-    st.markdown('<h2 class="subtitle">Document Type Samples</h2>', unsafe_allow_html=True)
-    for doc_type, samples in data["type_statistics"]["samples"].items():
-        with st.expander(f"Sample {doc_type} Documents"):
-            for i, sample in enumerate(samples, 1):
-                st.markdown(f"**Sample {i}**")
-                st.markdown("**Content:**")
-                st.text(sample["content"])
-                st.markdown("**Metadata:**")
-                st.json(sample["metadata"])
-                st.markdown("---")
-    
-    # Display uploaded files with counts
-    st.markdown('<h2 class="subtitle">Uploaded Files</h2>', unsafe_allow_html=True)
-    file_data = []
-    for source, count in data["source_statistics"]["counts"].items():
-        file_data.append({
-            "Filename": source,
-            "Chunks": count
-        })
-    files_df = pd.DataFrame(file_data)
-    st.dataframe(files_df, use_container_width=True)
-    
-    # Add a button to refresh the data
-    if st.button("Refresh Data", type="secondary"):
-        st.experimental_rerun()
-
-def display_sql_data():
-    """Display detailed information about the SQLite database."""
-    st.markdown('<h1 class="title">SQLite Database Details</h1>', unsafe_allow_html=True)
-    
-    # Fetch SQLite data
-    response = requests.get("http://localhost:8000/api/sqlite/data")
-    if response.status_code != 200:
-        st.error("Error fetching SQLite data. Please try again.")
-        return
-    
-    data = response.json()
-    if "error" in data:
-        st.error(data["error"])
-        return
-    
-    # Display SQLite data
-    st.markdown('<h2 class="subtitle">SQLite Data</h2>', unsafe_allow_html=True)
-    st.json(data)
-
 # Title and description
 st.markdown('<h1 class="title">Neogenesis Notebook</h1>', unsafe_allow_html=True)
 st.markdown('<h2 class="subtitle">AI-Powered Document Analysis Platform</h2>', unsafe_allow_html=True)
@@ -190,26 +109,6 @@ Neogenesis Notebook is an advanced document analysis platform that combines cutt
 
 Get started by uploading your documents and asking questions about their content.
 """)
-
-# Add database management buttons
-col1, col2, col3 = st.columns(3)
-with col1:
-    if st.button("Clear Database", type="secondary"):
-        response = requests.post("http://localhost:8000/clear-db")
-        if response.status_code == 200:
-            st.success("Databases cleared successfully!")
-            # Clear chat history
-            st.session_state.messages = []
-        else:
-            st.error("Error clearing databases. Please try again.")
-
-with col2:
-    if st.button("View Vector Data", type="secondary"):
-        display_collection_details()
-
-with col3:
-    if st.button("View SQL Data", type="secondary"):
-        display_sql_data()
 
 # File uploader
 st.markdown('<h2 class="subtitle">Upload Document</h2>', unsafe_allow_html=True)

@@ -24,7 +24,7 @@ from langchain_community.vectorstores.utils import filter_complex_metadata
 from langchain_community.document_loaders import UnstructuredPowerPointLoader
 from langchain.text_splitter import MarkdownHeaderTextSplitter
 from .api.routes import router
-from .core.config import API_HOST, API_PORT, CHROMA_DB_DIR
+from .core.config import API_HOST, API_PORT, CHROMA_DB_DIR, UPLOAD_DIR
 import logging
 from .services.document_processor import DocumentProcessor
 from langchain_core.documents import Document
@@ -189,11 +189,8 @@ async def upload_file(
     """Upload a file and process it into chunks."""
     logger.info(f"Received file upload request for: {file.filename}")
     
-    # Create uploads directory if it doesn't exist
-    os.makedirs("uploads", exist_ok=True)
-    
     # Save the uploaded file
-    file_path = os.path.join("uploads", file.filename)
+    file_path = os.path.join(UPLOAD_DIR, file.filename)
     logger.info(f"Saving uploaded file to: {file_path}")
     
     try:
@@ -278,99 +275,48 @@ async def chat(request: ChatRequest):
         logger.error(f"Error in chat: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.post("/clear-db")
-async def clear_database():
-    """Clear the Chroma database."""
+@app.get("/collections")
+async def get_collections():
+    """Get information about the vector store collections."""
     try:
         # Get the vector store instance
         vector_store = get_vector_store()
-        
-        # Delete all documents from the collection
-        try:
-            # Get all document IDs first
-            results = vector_store._collection.get()
-            if results and results.get("ids"):
-                vector_store._collection.delete(ids=results["ids"])
-        except Exception as e:
-            logger.error(f"Error deleting collection: {str(e)}")
-        
-        # Delete the Chroma database directory
-        if os.path.exists(CHROMA_DB_DIR):
-            try:
-                shutil.rmtree(CHROMA_DB_DIR)
-            except Exception as e:
-                logger.error(f"Error removing directory: {str(e)}")
-                # Try to remove files individually
-                for root, dirs, files in os.walk(CHROMA_DB_DIR, topdown=False):
-                    for name in files:
-                        try:
-                            os.remove(os.path.join(root, name))
-                        except Exception as e:
-                            logger.error(f"Error removing file {name}: {str(e)}")
-                    for name in dirs:
-                        try:
-                            os.rmdir(os.path.join(root, name))
-                        except Exception as e:
-                            logger.error(f"Error removing directory {name}: {str(e)}")
-                try:
-                    os.rmdir(CHROMA_DB_DIR)
-                except Exception as e:
-                    logger.error(f"Error removing root directory: {str(e)}")
-        
-        # Create fresh directory with proper permissions
-        os.makedirs(CHROMA_DB_DIR, mode=0o777, exist_ok=True)
-        
-        # Clear uploaded documents set
-        uploaded_documents.clear()
-        
-        return {"message": "Database cleared successfully"}
-    except Exception as e:
-        logger.error(f"Error clearing database: {str(e)}")
-        return {"error": f"Error clearing database: {str(e)}"}
-
-@app.get("/collections")
-async def get_collections():
-    """Get detailed information about Chroma collections."""
-    try:
-        if vector_store is None:
-            return {"collections": [], "message": "No collections found"}
         
         # Get collection information
         collection = vector_store._collection
         count = collection.count()
         
-        # Get all documents and metadata
+        # Get unique sources and types
         results = collection.get()
-        documents = results["documents"]
-        metadatas = results["metadatas"]
-        
-        # Process metadata to get unique values and statistics
         unique_sources = set()
         unique_types = set()
         type_counts = {}
+        type_samples = {}
         source_counts = {}
         
-        for meta in metadatas:
-            if meta:
-                if "source" in meta:
-                    unique_sources.add(meta["source"])
-                    source_counts[meta["source"]] = source_counts.get(meta["source"], 0) + 1
-                if "type" in meta:
-                    unique_types.add(meta["type"])
-                    type_counts[meta["type"]] = type_counts.get(meta["type"], 0) + 1
-        
-        # Get document samples for each type
-        type_samples = {}
-        for doc_type in unique_types:
-            type_samples[doc_type] = []
-            for i, meta in enumerate(metadatas):
-                if meta and meta.get("type") == doc_type:
-                    type_samples[doc_type].append({
-                        "content": documents[i][:200] + "..." if len(documents[i]) > 200 else documents[i],
-                        "metadata": meta
-                    })
-                    if len(type_samples[doc_type]) >= 3:  # Limit to 3 samples per type
-                        break
+        if results and results.get("metadatas"):
+            for metadata in results["metadatas"]:
+                if metadata:
+                    source = metadata.get("source", "Unknown")
+                    doc_type = metadata.get("type", "Unknown")
+                    
+                    unique_sources.add(source)
+                    unique_types.add(doc_type)
+                    
+                    # Count types
+                    type_counts[doc_type] = type_counts.get(doc_type, 0) + 1
+                    
+                    # Count sources
+                    source_counts[source] = source_counts.get(source, 0) + 1
+                    
+                    # Store samples
+                    if doc_type not in type_samples:
+                        type_samples[doc_type] = []
+                    if len(type_samples[doc_type]) < 3:  # Keep up to 3 samples per type
+                        type_samples[doc_type].append({
+                            "content": results["documents"][len(type_samples[doc_type])],
+                            "metadata": metadata
+                        })
         
         return {
             "total_documents": count,

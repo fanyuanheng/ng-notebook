@@ -105,4 +105,30 @@ async def get_sqlite_data():
         return data
     except Exception as e:
         logger.error(f"Error fetching SQLite data: {str(e)}", exc_info=True)
-        return {"error": f"Error fetching SQLite data: {str(e)}"} 
+        return {"error": f"Error fetching SQLite data: {str(e)}"}
+
+@router.post("/clear-db")
+async def clear_database():
+    """Clear both SQLite and Chroma vector databases."""
+    try:
+        # Clear SQLite database
+        import sqlite3
+        from ..core.config import SQLITE_DB_DIR
+        db_path = SQLITE_DB_DIR / "documents.db"
+        if os.path.exists(db_path):
+            conn = sqlite3.connect(str(db_path))
+            cursor = conn.cursor()
+            cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")
+            tables = cursor.fetchall()
+            for table in tables:
+                cursor.execute(f"DELETE FROM {table[0]}")
+            conn.commit()
+            conn.close()
+        
+        # Clear Chroma vector database
+        vector_store.clear()
+        
+        return {"message": "Databases cleared successfully."}
+    except Exception as e:
+        logger.error(f"Error clearing databases: {str(e)}", exc_info=True)
+        return {"error": f"Error clearing databases: {str(e)}"} 

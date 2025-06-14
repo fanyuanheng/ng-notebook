@@ -197,11 +197,11 @@ with col1:
     if st.button("Clear Database", type="secondary"):
         response = requests.post("http://localhost:8000/clear-db")
         if response.status_code == 200:
-            st.success("Database cleared successfully!")
+            st.success("Databases cleared successfully!")
             # Clear chat history
             st.session_state.messages = []
         else:
-            st.error("Error clearing database. Please try again.")
+            st.error("Error clearing databases. Please try again.")
 
 with col2:
     if st.button("View Vector Data", type="secondary"):
@@ -264,17 +264,19 @@ if prompt := st.chat_input("Ask a question about your document"):
         # Add assistant response to chat history
         st.session_state.messages.append({
             "role": "assistant",
-            "content": response_data["response"]
+            "content": response_data["answer"]
         })
         
         # Display assistant response
         with st.chat_message("assistant"):
-            st.markdown(response_data["response"])
+            st.markdown(response_data["answer"])
             
             # Display sources if available
-            if response_data.get("sources"):
+            if response_data.get("source_documents"):
                 with st.expander("View Sources"):
-                    for source in response_data["sources"]:
-                        st.markdown(f"```\n{source}\n```")
+                    for source in response_data["source_documents"]:
+                        st.markdown(f"**Source:** {source['metadata'].get('source', 'Unknown')}")
+                        st.markdown(f"**Content:** {source['content'][:200]}...")
+                        st.markdown("---")
     else:
         st.error("Error getting response. Please try again.") 

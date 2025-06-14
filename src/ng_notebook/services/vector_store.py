@@ -4,12 +4,14 @@ from langchain_chroma import Chroma
 from langchain.chains import ConversationalRetrievalChain
 from langchain.memory import ConversationBufferMemory
 from langchain.prompts import PromptTemplate
+from langchain_core.documents import Document
 from ..core.config import CHROMA_DB_DIR, LLM_MODEL, EMBEDDING_MODEL
 from .sqlite_store import SQLiteStore
 from .document_processor import DocumentProcessor
 import logging
 import os
 from pathlib import Path
+import shutil
 
 # Get the dedicated vector store logger
 logger = logging.getLogger('ng_notebook.services.vector_store')
@@ -86,11 +88,11 @@ def get_document_processor() -> DocumentProcessor:
 
 class VectorStore:
     def __init__(self):
-        self.embeddings = OllamaEmbeddings(model=EMBEDDING_MODEL)
+        self._embeddings = OllamaEmbeddings(model=EMBEDDING_MODEL)
         self.llm = OllamaLLM(model=LLM_MODEL)
         self.vector_store = Chroma(
             persist_directory=str(CHROMA_DB_DIR),
-            embedding_function=self.embeddings
+            embedding_function=self._embeddings
         )
         self._setup_chain()
 
@@ -168,29 +170,57 @@ class VectorStore:
             "samples": samples
         }
 
-def add_documents(documents: List[str], metadatas: Optional[List[dict]] = None) -> None:
-    """
-    Add documents to the vector store.
-    Args:
-        documents (List[str]): List of document texts to add
-        metadatas (Optional[List[dict]]): List of metadata dictionaries for each document
-    """
-    try:
-        vector_store = get_vector_store()
-        logger.info("Adding %d documents to vector store", len(documents))
-        
-        if metadatas:
-            logger.debug("Adding documents with metadata")
-            vector_store.add_texts(texts=documents, metadatas=metadatas)
-        else:
-            logger.debug("Adding documents without metadata")
-            vector_store.add_texts(texts=documents)
+    def similarity_search(self, query: str, k: int = 4, **kwargs) -> List[Document]:
+        """Search for similar documents."""
+        return self.vector_store.similarity_search(query, k=k, **kwargs)
+
+    def add_texts(self, texts: List[str], metadatas: Optional[List[dict]] = None, **kwargs) -> List[str]:
+        """Add texts to the vector store."""
+        return self.vector_store.add_texts(texts=texts, metadatas=metadatas, **kwargs)
+
+    def as_retriever(self, **kwargs):
+        """Get a retriever for the vector store."""
+        return self.vector_store.as_retriever(**kwargs)
+
+    def clear(self):
+        """Clear all documents from the vector store."""
+        try:
+            # Get all document IDs first
+            results = self.vector_store._collection.get()
+            if results and results.get("ids"):
+                self.vector_store._collection.delete(ids=results["ids"])
             
-        logger.info("Successfully added documents to vector store")
-        
-    except Exception as e:
-        logger.error("Failed to add documents to vector store: %s", str(e), exc_info=True)
-        raise
+            # Delete the Chroma database directory
+            if os.path.exists(CHROMA_DB_DIR):
+                try:
+                    shutil.rmtree(CHROMA_DB_DIR)
+                except Exception as e:
+                    logger.error(f"Error removing directory: {str(e)}")
+                    # Try to remove files individually
+                    for root, dirs, files in os.walk(CHROMA_DB_DIR, topdown=False):
+                        for name in files:
+                            try:
+                                os.remove(os.path.join(root, name))
+                            except Exception as e:
+                                logger.error(f"Error removing file {name}: {str(e)}")
+                        for name in dirs:
+                            try:
+                                os.rmdir(os.path.join(root, name))
+                            except Exception as e:
+                                logger.error(f"Error removing directory {name}: {str(e)}")
+                    try:
+                        os.rmdir(CHROMA_DB_DIR)
+                    except Exception as e:
+                        logger.error(f"Error removing root directory: {str(e)}")
+            
+            # Create fresh directory with proper permissions
+            os.makedirs(CHROMA_DB_DIR, mode=0o777, exist_ok=True)
+            
+            logger.info("Vector store cleared successfully")
+            
+        except Exception as e:
+            logger.error(f"Error clearing vector store: {str(e)}")
+            raise
 
 def search_documents(query: str, k: int = 4) -> List[dict]:
     """
@@ -229,8 +259,9 @@ def clear_vector_store() -> None:
         vector_store = get_vector_store()
         logger.info("Clearing vector store")
         
-        vector_store.delete_collection()
-        vector_store = None
+        # Delete all documents from the collection
+        vector_store.delete(ids=vector_store.get()["ids"])  # Delete all documents by their IDs
+        
         logger.info("Vector store cleared successfully")
         
     except Exception as e:

@@ -24,11 +24,11 @@ from langchain_community.vectorstores.utils import filter_complex_metadata
 from langchain_community.document_loaders import UnstructuredPowerPointLoader
 from langchain.text_splitter import MarkdownHeaderTextSplitter
 from .api.routes import router
-from .core.config import API_HOST, API_PORT
+from .core.config import API_HOST, API_PORT, CHROMA_DB_DIR
 import logging
 from .services.document_processor import DocumentProcessor
 from langchain_core.documents import Document
-from langchain.vectorstores import VectorStore
+from .services.vector_store import VectorStore
 from .services.sqlite_store import SQLiteStore
 from .services.vector_store import get_vector_store, get_sqlite_store, get_document_processor, get_llm
 
@@ -58,7 +58,7 @@ llm = Ollama(model="llama3.3:latest")
 embeddings = OllamaEmbeddings(model="all-minilm")
 
 # Get vector store instance using singleton pattern
-vector_store = get_vector_store()
+vector_store = VectorStore()
 
 # Initialize conversation memory
 memory = ConversationBufferMemory(
@@ -258,41 +258,22 @@ async def upload_file(
             logger.error(f"Error cleaning up file: {str(e)}", exc_info=True)
 
 @app.post("/chat")
-async def chat(
-    request: ChatRequest,
-    vector_store: VectorStore = Depends(get_vector_store),
-    sqlite_store: SQLiteStore = Depends(get_sqlite_store),
-    llm: Ollama = Depends(get_llm)
-) -> ChatResponse:
-    """Handle chat requests."""
+async def chat(request: ChatRequest):
+    """Chat with the AI about the documents."""
     try:
-        # Get relevant documents from vector store
+        # Get response from vector store
         vector_result = vector_store.query(request.message)
         
-        # Get results from SQLite store
-        sqlite_results = sqlite_store.query_data(request.message)
-        
-        # Combine results
-        combined_context = vector_result["answer"]
-        if sqlite_results:
-            combined_context += "\n\nSQLite Data:\n"
-            for result in sqlite_results:
-                combined_context += f"\nTable: {result['table']}\n"
-                combined_context += f"Data: {result['data']}\n"
-        
-        # Generate final response using combined context
-        final_response = llm.invoke(
-            f"""Based on the following context, answer the question. If you don't know the answer, just say that you don't know.
-
-Context:
-{combined_context}
-
-Question: {request.message}
-
-Answer:"""
-        )
-        
-        return ChatResponse(response=final_response)
+        return {
+            "answer": vector_result["answer"],
+            "source_documents": [
+                {
+                    "content": doc.page_content,
+                    "metadata": doc.metadata
+                }
+                for doc in vector_result["source_documents"]
+            ]
+        }
     except Exception as e:
         logger.error(f"Error in chat: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
@@ -304,9 +285,12 @@ async def clear_database():
         # Get the vector store instance
         vector_store = get_vector_store()
         
-        # Delete the collection
+        # Delete all documents from the collection
         try:
-            vector_store._collection.delete()
+            # Get all document IDs first
+            results = vector_store._collection.get()
+            if results and results.get("ids"):
+                vector_store._collection.delete(ids=results["ids"])
         except Exception as e:
             logger.error(f"Error deleting collection: {str(e)}")
         

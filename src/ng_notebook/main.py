@@ -1,27 +1,13 @@
 import os
-from typing import List
 from fastapi import FastAPI, UploadFile, File, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 from langchain_community.llms import Ollama
 from langchain_community.embeddings import OllamaEmbeddings
-import streamlit as st
-import tempfile
-import pandas as pd
-from pptx import Presentation
-import PyPDF2
-import magic
-import shutil
-import chromadb
-from chromadb.config import Settings
-from langchain_community.vectorstores.utils import filter_complex_metadata
-from langchain_community.document_loaders import UnstructuredPowerPointLoader
-from langchain.text_splitter import MarkdownHeaderTextSplitter
-from .api.routes import router
-from .core.config import API_HOST, API_PORT, CHROMA_DB_DIR, UPLOAD_DIR
 import logging
+from .api.routes import router
+from .core.config import API_HOST, API_PORT, UPLOAD_DIR
 from .services.document_processor import DocumentProcessor
-from langchain_core.documents import Document
 from .services.vector_store import VectorStore
 from .services.sqlite_store import SQLiteStore
 from .services.vector_store import get_vector_store, get_sqlite_store, get_document_processor, get_llm
@@ -56,18 +42,6 @@ vector_store = VectorStore()
 # Initialize services
 chat_service = ChatService(vector_store, llm)
 upload_service = UploadService(vector_store, document_processor, UPLOAD_DIR)
-
-def clean_metadata(metadata: dict) -> dict:
-    """Clean metadata to ensure all values are simple types."""
-    cleaned = {}
-    for key, value in metadata.items():
-        if isinstance(value, (str, int, float, bool)) or value is None:
-            cleaned[key] = value
-        elif isinstance(value, list):
-            cleaned[key] = ",".join(str(x) for x in value)
-        else:
-            cleaned[key] = str(value)
-    return cleaned
 
 @app.post("/upload")
 async def upload_file(

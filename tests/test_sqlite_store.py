@@ -81,4 +81,21 @@ def test_get_file_metadata(sqlite_store, tmp_path):
     assert metadata["filename"] == "test.csv"
     assert metadata["file_type"] == "csv"
     assert len(metadata["sheets"]) == 1
-    assert metadata["sheets"][0]["row_count"] == 3 
+    assert metadata["sheets"][0]["row_count"] == 3
+
+def test_query_data(sqlite_store, tmp_path):
+    """Test the query_data method returns expected table and sample data."""
+    # Add a test CSV file
+    csv_path = tmp_path / "sample.csv"
+    df = pd.DataFrame({"a": [10, 20, 30], "b": ["x", "y", "z"]})
+    df.to_csv(csv_path, index=False)
+    sqlite_store.add_csv_file(str(csv_path))
+
+    # Query data
+    results = sqlite_store.query_data("any question")
+    # There should be at least one table with sample data
+    assert isinstance(results, list)
+    assert len(results) >= 1
+    assert "table" in results[0]
+    assert "data" in results[0]
+    assert len(results[0]["data"]) > 0 

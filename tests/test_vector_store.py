@@ -7,7 +7,6 @@ from langchain_ollama import OllamaEmbeddings, OllamaLLM
 from langchain_chroma import Chroma
 from langchain_core.retrievers import BaseRetriever
 from ng_notebook.services.vector_store import VectorStore
-from ng_notebook.services.sqlite_store import SQLiteStore
 
 @pytest.fixture
 def test_chroma_dir(tmp_path):
@@ -15,13 +14,6 @@ def test_chroma_dir(tmp_path):
     chroma_dir = tmp_path / "test_chroma_db"
     chroma_dir.mkdir(exist_ok=True)
     return chroma_dir
-
-@pytest.fixture
-def test_sqlite_dir(tmp_path):
-    """Create a temporary directory for test SQLite database."""
-    sqlite_dir = tmp_path / "test_sqlite_db"
-    sqlite_dir.mkdir(exist_ok=True)
-    return sqlite_dir
 
 @pytest.fixture
 def mock_retriever():
@@ -48,11 +40,10 @@ def mock_chroma(mock_retriever):
     return mock
 
 @pytest.fixture
-def vector_store(test_chroma_dir, test_sqlite_dir, mock_chroma):
+def vector_store(test_chroma_dir, mock_chroma):
     """Create a VectorStore instance with test database directories and mocked Chroma."""
     # Set environment variables for test databases
     os.environ["CHROMA_DB_DIR"] = str(test_chroma_dir)
-    os.environ["SQLITE_DB_DIR"] = str(test_sqlite_dir)
     
     # Create store instance with mocked Chroma
     with patch('ng_notebook.services.vector_store.Chroma', return_value=mock_chroma), \
@@ -83,10 +74,6 @@ def vector_store(test_chroma_dir, test_sqlite_dir, mock_chroma):
         for file in test_chroma_dir.glob("*"):
             file.unlink()
         test_chroma_dir.rmdir()
-    if os.path.exists(test_sqlite_dir):
-        for file in test_sqlite_dir.glob("*"):
-            file.unlink()
-        test_sqlite_dir.rmdir()
 
 def test_add_documents(vector_store, mock_chroma):
     """Test adding documents to the vector store."""
@@ -117,33 +104,21 @@ def test_add_documents(vector_store, mock_chroma):
 
 def test_query(vector_store):
     """Test querying the vector store."""
-    # Mock SQLite results
-    vector_store.sqlite_store.query_data = Mock(return_value=[])
-    
     # Query the store
     response = vector_store.query("What is the capital of France?")
     
     # Verify response
     assert response["answer"] == "Test answer"
     assert len(response["source_documents"]) == 1
-    assert response["sqlite_results"] == []
     # Verify chain was called
     vector_store.chain.assert_called_once()
 
 def test_get_collections(vector_store, mock_chroma):
     """Test getting collection information."""
-    # Mock SQLite metadata
-    vector_store.sqlite_store.get_file_metadata = Mock(return_value={
-        "filename": "test1.txt",
-        "metadata": {"type": "text"}
-    })
-    
     # Get collections
     collections = vector_store.get_collections()
     
     # Verify collections info
     assert collections["total_documents"] == 2
     assert collections["unique_sources"] == 1  # Only one unique source
-    assert len(collections["samples"]) == 2
-    assert len(collections["sqlite_metadata"]) == 1  # One metadata entry per unique source
-    assert collections["sqlite_metadata"][0]["filename"] == "test1.txt" 
+    assert len(collections["samples"]) == 2 

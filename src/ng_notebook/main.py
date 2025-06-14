@@ -26,6 +26,7 @@ from .services.vector_store import VectorStore
 from .services.sqlite_store import SQLiteStore
 from .services.vector_store import get_vector_store, get_sqlite_store, get_document_processor, get_llm
 from .services.chat_service import ChatService, ChatRequest
+from .services.upload_service import UploadService
 
 # Get logger
 logger = logging.getLogger(__name__)
@@ -42,9 +43,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Track uploaded documents
-uploaded_documents = set()
-
 # Initialize document processor
 document_processor = DocumentProcessor()
 
@@ -55,8 +53,9 @@ embeddings = OllamaEmbeddings(model="all-minilm")
 # Get vector store instance using singleton pattern
 vector_store = VectorStore()
 
-# Initialize chat service
+# Initialize services
 chat_service = ChatService(vector_store, llm)
+upload_service = UploadService(vector_store, document_processor, UPLOAD_DIR)
 
 def clean_metadata(metadata: dict) -> dict:
     """Clean metadata to ensure all values are simple types."""
@@ -78,72 +77,7 @@ async def upload_file(
     document_processor: DocumentProcessor = Depends(get_document_processor)
 ):
     """Upload a file and process it into chunks."""
-    logger.info(f"Received file upload request for: {file.filename}")
-    
-    # Save the uploaded file
-    file_path = os.path.join(UPLOAD_DIR, file.filename)
-    logger.info(f"Saving uploaded file to: {file_path}")
-    
-    try:
-        with open(file_path, "wb") as f:
-            content = await file.read()
-            f.write(content)
-        
-        # Verify file exists and has content
-        if not os.path.exists(file_path):
-            raise HTTPException(status_code=500, detail="Failed to save uploaded file")
-        
-        file_size = os.path.getsize(file_path)
-        logger.info(f"Saved file size: {file_size} bytes")
-        if file_size == 0:
-            raise HTTPException(status_code=400, detail="Uploaded file is empty")
-        
-        # Detect file type using python-magic
-        file_type = magic.from_file(file_path, mime=True)
-        logger.info(f"Detected file type: {file_type}")
-        
-        if not file_type:
-            # Fallback to content_type if magic fails
-            file_type = file.content_type
-            logger.info(f"Using content_type as fallback: {file_type}")
-        
-        if not file_type:
-            raise HTTPException(status_code=400, detail="Could not detect file type")
-        
-        # Process the document into chunks
-        logger.info("Processing document into chunks")
-        chunks = document_processor.process_document(file_path, file_type)
-        logger.info(f"Generated {len(chunks)} chunks")
-        
-        # Add chunks to vector store
-        logger.info("Adding chunks to vector store")
-        for chunk in chunks:
-            if isinstance(chunk, dict):
-                # Convert dict to Document if needed
-                doc = Document(
-                    page_content=chunk.get("page_content", ""),
-                    metadata=chunk.get("metadata", {})
-                )
-                vector_store.add_documents([doc])
-            else:
-                # If it's already a Document, use it directly
-                vector_store.add_documents([chunk])
-        
-        logger.info("Successfully processed and stored document")
-        return {"message": "File uploaded and processed successfully"}
-        
-    except Exception as e:
-        logger.error(f"Error processing file: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
-        
-    finally:
-        # Clean up the uploaded file
-        try:
-            if os.path.exists(file_path):
-                os.remove(file_path)
-                logger.info(f"Cleaned up temporary file: {file_path}")
-        except Exception as e:
-            logger.error(f"Error cleaning up file: {str(e)}", exc_info=True)
+    return await upload_service.process_upload(file, vector_store, sqlite_store, document_processor)
 
 @app.post("/chat")
 async def chat(request: ChatRequest):
@@ -202,7 +136,7 @@ async def get_collections():
             "unique_sources": list(unique_sources),
             "document_types": list(unique_types),
             "collection_name": collection.name,
-            "uploaded_files": list(uploaded_documents),
+            "uploaded_files": list(upload_service.get_uploaded_documents()),
             "type_statistics": {
                 "counts": type_counts,
                 "samples": type_samples
